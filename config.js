@@ -6,12 +6,12 @@
    la dan las reglas de Firestore (archivo firestore.rules).
    ============================================================ */
 window.FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyCrVwkOyKCFku-Gu8CsGY_JIirgPb-2-RE",
+  authDomain: "pedidos-tasa.firebaseapp.com",
+  projectId: "pedidos-tasa",
+  storageBucket: "pedidos-tasa.firebasestorage.app",
+  messagingSenderId: "805517202684",
+  appId: "1:805517202684:web:b3747f007b84dd50b0f379"
 };
 /* Dominio interno para los usuarios (no necesita existir).
    El usuario "jperez" ingresa como jperez@<este dominio>. No lo cambie
