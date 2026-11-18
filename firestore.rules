@@ -1,0 +1,90 @@
+rules_version = '2';
+// Reglas de seguridad — Pedidos de Material · Astillero TASA
+// Pegue este contenido en: Consola de Firebase → Firestore Database → Reglas → Publicar.
+// Si cambió DOMINIO_USUARIOS en config.js, cambie también 'pedidos-tasa.app' abajo.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function dominio() { return 'pedidos-tasa.app'; }
+    function signed() { return request.auth != null && request.auth.token.email != null
+                               && request.auth.token.email.split('@')[1] == dominio(); }
+    function uname() { return request.auth.token.email.split('@')[0]; }
+    function cuentaPath() { return /databases/$(database)/documents/cuentas/$(uname()); }
+    function me() { return get(cuentaPath()).data; }
+    function active() { return signed() && exists(cuentaPath()) && me().get('activo', true) != false; }
+    function isAdmin() { return active() && me().rol == 'admin'; }
+    function perm(p) {
+      return active() && (me().rol == 'admin' ||
+        (exists(/databases/$(database)/documents/rolesCfg/$(me().rol)) &&
+         p in get(/databases/$(database)/documents/rolesCfg/$(me().rol)).data.permisos));
+    }
+    function myEmp() { return me().get('empresaId', ''); }
+    function sinIniciar() { return !exists(/databases/$(database)/documents/config/sistema); }
+
+    // Estado de instalación (lo lee la pantalla de ingreso antes de iniciar sesión)
+    match /config/sistema {
+      allow get: if true;
+      allow create: if signed() && sinIniciar();
+      allow update, delete: if isAdmin();
+    }
+    match /config/{id} {
+      allow read: if active();
+      allow write: if id != 'sistema' && (perm('usuarios') || (id == 'plantillas' && perm('formulas')));
+    }
+    match /rolesCfg/{id} {
+      allow read: if signed();
+      allow write: if isAdmin() || (signed() && sinIniciar());
+    }
+    match /cuentas/{u} {
+      allow read: if active() || (signed() && uname() == u);
+      allow create: if isAdmin() || (signed() && uname() == u && sinIniciar() && request.resource.data.rol == 'admin');
+      allow update: if isAdmin() || (active() && uname() == u &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['correo1','correo2','correo3','ultimoIngreso','actualizado']));
+      allow delete: if isAdmin();
+    }
+    // Contraseñas visibles solo para administradores
+    match /claves/{u} {
+      allow read: if isAdmin();
+      allow write: if isAdmin() || (active() && uname() == u) || (signed() && uname() == u && sinIniciar());
+    }
+    match /catalogo/{id} {
+      allow read: if active();
+      allow write: if perm('editar_mat');
+    }
+    match /materiales/{id} {
+      allow read: if active();
+      allow create: if perm('editar_mat') || (perm('crear') && request.resource.data.ref == true);
+      allow update, delete: if perm('editar_mat');
+    }
+    match /embarcaciones/{id} {
+      allow read: if active();
+      allow write: if perm('editar_emb');
+    }
+    match /empresas/{id} {
+      allow read: if active();
+      allow write: if perm('usuarios') || perm('validar');
+    }
+    match /solicitudes/{id} {
+      allow read: if perm('ver_todas') ||
+        (active() && (resource.data.createdBy == uname() || (myEmp() != '' && resource.data.empresaId == myEmp())));
+      allow create: if perm('crear') || perm('validar');
+      allow update: if perm('validar') || perm('reserva') ||
+        (perm('crear') && (resource.data.createdBy == uname() || (myEmp() != '' && resource.data.empresaId == myEmp())));
+      allow delete: if perm('eliminar');
+    }
+    match /plantillasSol/{id} {
+      allow read: if active();
+      allow create: if perm('crear');
+      allow update, delete: if perm('validar') || (perm('crear') && resource.data.creadoPor == uname());
+    }
+    match /notificaciones/{id} {
+      allow read, create: if active();
+      allow update: if perm('validar') || (active() && resource.data.por == uname());
+      allow delete: if perm('eliminar');
+    }
+    match /fotos/{id} {
+      allow read, create: if active();
+      allow delete: if perm('eliminar') || perm('editar_mat');
+    }
+  }
+}
