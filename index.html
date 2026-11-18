@@ -328,7 +328,7 @@ function memDB(){const store=new Map(),subs=new Set();let t=0;
   return {doc:docRef,collection:col=>({path:col,doc:id=>docRef(col+'/'+(id||rid())),
     onSnapshot(cb){const f=()=>{const docs=[...store.entries()].filter(([p])=>p.slice(0,p.lastIndexOf('/'))===col).map(([p,v])=>snap(p,v));cb({docs,size:docs.length,empty:!docs.length,metadata:{fromCache:false}})};subs.add(f);setTimeout(f,0);return()=>subs.delete(f)}})}}
 const wq={};
-function W(path,fn){const p=(wq[path]||Promise.resolve()).then(fn);wq[path]=p.catch(()=>{});return p.catch(e=>{
+function W(path,fn){S.pend=(S.pend||0)+1;const t0=Date.now();const tw=setTimeout(()=>{S.lento=true;schedule()},8000);const p=(wq[path]||Promise.resolve()).then(fn);p.then(()=>{S.ultSync=new Date()},()=>{}).finally(()=>{clearTimeout(tw);S.pend--;if(!S.pend)S.lento=false;schedule()});wq[path]=p.catch(()=>{});return p.catch(e=>{
   const c=e&&e.code;toast(c==='invalid_argument'||c==='permission-denied'?'Sin permiso para esta acción con su rol.':c==='quota_exceeded'?'Base de datos llena: '+(e.message||''):'No se pudo guardar: '+(e&&(e.message||e.code)||e),'bad');throw e})}
 const setDoc=(path,data)=>W(path,()=>S.db.doc(path).set(clone(data)));
 const delDoc=path=>W(path,()=>S.db.doc(path).delete());
@@ -389,9 +389,10 @@ function render(){
   a.innerHTML=`<div class="top"><div class="brand"><img class="logo" src="${LOGO_S}" alt="TASA">Pedidos de Material<span class="nm" style="font-weight:400;opacity:.8">&nbsp;· Astillero TASA</span></div><div class="sp"></div>
    ${S.realRole==='admin'?`<select data-ch="viewAs" title="Ver la app como otro rol">${rolesList().map(r=>`<option value="${esc(r.id)}" ${S.role===r.id?'selected':''}>Ver como: ${esc(r.nombre)}</option>`).join('')}</select>`:''}
    ${S.realRole==='admin'&&S.viewAs&&!can('ver_todas')?`<select data-ch="viewEmp"><option value="">Empresa…</option>${S.empresas.map(e=>`<option value="${e.id}" ${myEmpresa()===e.id?'selected':''}>${esc(e.nombre)}</option>`).join('')}</select>`:''}
-   <div class="who"><span class="nm">${esc(c.nombre||c.id)}<br></span><b>${esc(rolNombre(S.role))}</b>${emp?' · '+esc(emp.nombre):''}</div>
+   ${S.fb?syncDot():''}<div class="who"><span class="nm">${esc(c.nombre||c.id)}<br></span><b>${esc(rolNombre(S.role))}</b>${emp?' · '+esc(emp.nombre):''}</div>
    <button class="btn s" style="background:var(--navy2);color:#fff;border-color:#2c4a77" data-act="logout">Salir</button></div>
    ${S.demo?'<div class="banner">Modo demostración (falta configurar Firebase en config.js): los datos no se guardan. Usuario de prueba: <b>admin</b> / <b>admin123</b>.</div>':''}
+   ${S.fb&&(S.lento||S.offline)?`<div class="banner" style="background:#fde6e3;border-color:#eea79d;color:#701a10">${S.lento?'⏳ Hay cambios que todavía no llegan al servidor. Revise su conexión a internet y <b>no cierre esta página</b> hasta que el indicador quede en verde.':'⚠ Sin conexión con el servidor: lo que ve puede estar desactualizado y sus cambios se enviarán al reconectar.'}</div>`:''}
    ${S.stale?'<div class="banner">No se puede conectar con la base de datos todavía; lo mostrado puede estar desactualizado.</div>':''}
    ${S.cuenta==='__owner__'?'<div class="banner">Acceso de recuperación de la propietaria. Cree o restablezca su usuario en Gestión → Usuarios.</div>':''}
    <div class="layout">${nav('side')}<main>${S.view!=='detalle'?botVista(S.view):''}${view()}</main></div>${nav('bottom')}${S.modal?modalHTML():''}`;
@@ -468,7 +469,7 @@ function vInicio(){
   <div class="card"><h2>Requieren acción</h2>${accion.length?tablaSol(accion,issuesOf):'<div class="empty">Nada pendiente. 👍</div>'}</div>`}
 function tablaSol(L,issuesOf){return `<div class="scroll"><table class="rs"><thead><tr><th>Fecha</th><th>Periodo</th><th>Embarcación</th><th>Sistema</th><th>Grafo / Pos</th><th>Actividad</th><th>Empresa</th><th>Ítems</th><th>Reserva</th><th>Estado</th><th>Revisión</th></tr></thead><tbody>
   ${L.map(s=>{const is=issuesOf?issuesOf(s):revisar(s);const er=is.filter(i=>i.n==='error').length,av=is.filter(i=>i.n==='aviso').length;const e=empBy(s.empresaId);
-  return `<tr class="click" data-act="open" data-id="${esc(s.id)}"><td data-l="Fecha">${esc(fdt(s.fechaSolicitud))}</td><td data-l="Periodo">${esc(solPeriodo(s)||'—')}</td><td data-l="Embarcación"><b>${esc(s.header.proyecto||'—')}</b></td><td data-l="Sistema">${esc(s.header.sistema||'—')}</td><td data-l="Grafo / Pos" class="mono">${esc(s.header.grafo||'—')} / ${esc(s.header.pos||'—')}</td><td data-l="Actividad">${esc((s.header.nombreActividad||(s.header.actividadTentativa?'(tentativa) '+s.header.actividadTentativa:'')||s.header.consideraciones||'').slice(0,60))}</td><td data-l="Empresa">${esc(e?e.nombre:(s.header.empresaTxt||'—'))}</td><td data-l="Ítems">${(s.items||[]).length}</td><td data-l="Reserva" class="mono">${esc(resumenReserva(s)||'—')}</td><td data-l="Estado">${chip(s.estado)}</td><td data-l="Revisión">${er?`<span class="chip e-Observada">${er} error</span>`:''} ${av?`<span class="chip ref">${av} aviso</span>`:''}${!er&&!av?'<span class="chip e-Validada">OK</span>':''}</td></tr>`}).join('')}</tbody></table></div>`}
+  return `<tr class="click" data-act="open" data-id="${esc(s.id)}"><td data-l="Fecha">${esc(fdt(s.fechaSolicitud))}</td><td data-l="Periodo">${esc(solPeriodo(s)||'—')}</td><td data-l="Embarcación"><b>${esc(s.header.proyecto||'—')}</b></td><td data-l="Sistema">${esc(s.header.sistema||'—')}</td><td data-l="Grafo / Pos" class="mono">${esc(s.header.grafo||'—')} / ${esc(s.header.pos||'—')}</td><td data-l="Actividad">${esc((s.header.nombreActividad||(s.header.actividadTentativa?'(tentativa) '+s.header.actividadTentativa:'')||s.header.consideraciones||'').slice(0,60))}</td><td data-l="Empresa">${esc(e?e.nombre:(s.header.empresaTxt||'—'))}</td><td data-l="Ítems">${(s.items||[]).length}</td><td data-l="Reserva" class="mono">${esc(resumenReserva(s)||'—')}</td><td data-l="Estado">${chip(s.estado)}${S.pendIds&&S.pendIds.has(s.id)?' <span class="chip" style="background:#fde6e3;color:#701a10" title="Guardada solo en este equipo; aún no llega al servidor">⏳ sin enviar</span>':''}</td><td data-l="Revisión">${er?`<span class="chip e-Observada">${er} error</span>`:''} ${av?`<span class="chip ref">${av} aviso</span>`:''}${!er&&!av?'<span class="chip e-Validada">OK</span>':''}</td></tr>`}).join('')}</tbody></table></div>`}
 
 /* ---------- Lista ---------- */
 function vLista(){const f=S.filt;let L=visibles();
@@ -1227,11 +1228,11 @@ function subscribeFB(){const db=FB.raw;const t=setTimeout(()=>{S.stale=true;rend
 function ensureSolSub(){if(!S.loaded.rolesCfg||!S.loaded.cuentas)return;const c=S.cuentas.find(x=>x.id===S.cuenta);if(!c)return;
   const r=rolBy(c.rol);const todas=c.rol==='admin'||(r&&(r.permisos||[]).includes('ver_todas'));const key=c.rol+'|'+(c.empresaId||'')+'|'+todas;if(key===solKey)return;
   if(S.solUnsub)S.solUnsub.forEach(u=>u());S.solUnsub=[];solKey=key;const db=FB.raw;
-  const parts={};const push=(k,sn)=>{parts[k]=sn.docs.map(d=>({...d.data(),id:d.id}));const m=new Map();Object.values(parts).forEach(l=>l.forEach(x=>m.set(x.id,x)));S.solicitudes=[...m.values()];S.loaded.solicitudes=1;afterData()};
+  const parts={};S.pendIds=new Set();const push=(k,sn)=>{S.offline=sn.metadata.fromCache;sn.docs.forEach(d=>{if(d.metadata.hasPendingWrites)S.pendIds.add(d.id);else S.pendIds.delete(d.id)});parts[k]=sn.docs.map(d=>({...d.data(),id:d.id}));const m=new Map();Object.values(parts).forEach(l=>l.forEach(x=>m.set(x.id,x)));S.solicitudes=[...m.values()];S.loaded.solicitudes=1;afterData()};
   const err=e=>{console.warn('solicitudes',e);S.loaded.solicitudes=1;afterData()};
-  if(todas)S.solUnsub.push(db.collection('solicitudes').onSnapshot(sn=>push('all',sn),err));
-  else{S.solUnsub.push(db.collection('solicitudes').where('createdBy','==',S.cuenta).onSnapshot(sn=>push('mias',sn),err));
-    if(c.empresaId)S.solUnsub.push(db.collection('solicitudes').where('empresaId','==',c.empresaId).onSnapshot(sn=>push('emp',sn),err))}
+  if(todas)S.solUnsub.push(db.collection('solicitudes').onSnapshot({includeMetadataChanges:true},sn=>push('all',sn),err));
+  else{S.solUnsub.push(db.collection('solicitudes').where('createdBy','==',S.cuenta).onSnapshot({includeMetadataChanges:true},sn=>push('mias',sn),err));
+    if(c.empresaId)S.solUnsub.push(db.collection('solicitudes').where('empresaId','==',c.empresaId).onSnapshot({includeMetadataChanges:true},sn=>push('emp',sn),err))}
   subs.push(()=>{(S.solUnsub||[]).forEach(u=>u());S.solUnsub=[]})}
 
 /* --- Funciones que eligen entre Firebase y el modo de demostración --- */
@@ -1264,9 +1265,13 @@ async function onAuth(u){if(S.bootstrapping)return;stopSubs();resetData();
   FB.raw.doc('cuentas/'+un).update({ultimoIngreso:nowISO()}).catch(()=>{});
   subscribe();S.boot='ok';render()}
 
+function syncDot(){const st=S.offline?['#e5534b','Sin conexión']:(S.lento||S.pend)?['#e9a23b',S.lento?'Cambios sin enviar':'Guardando…']:['#57c27a','En línea'];
+  return `<span title="${st[1]}${S.ultSync?' · último guardado '+S.ultSync.toLocaleTimeString('es-PE'):''}" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;opacity:.95"><i style="width:9px;height:9px;border-radius:50%;background:${st[0]};box-shadow:0 0 0 3px rgba(255,255,255,.15)"></i><span class="nm">${st[1]}</span></span>`}
 const ACT0={...ACT};
 Object.assign(ACT,{
-  async logout(){if(!S.fb)return ACT0.logout();if(S.dirty&&S.draft&&editable(S.draft)&&tieneContenido(S.draft))await saveDraft(null,true).catch(()=>{});await FB.auth.signOut()},
+  async logout(){if(!S.fb)return ACT0.logout();if(S.dirty&&S.draft&&editable(S.draft)&&tieneContenido(S.draft))saveDraft(null,true).catch(()=>{});
+    toast('Enviando cambios pendientes…');const ok=await Promise.race([FB.raw.waitForPendingWrites().then(()=>true,()=>true),sleep(10000).then(()=>false)]);
+    if(!ok){S.modal={t:'confirm',title:'Cambios sin enviar',msg:'Hay cambios que todavía no llegan al servidor (problema de conexión). Si sale ahora se perderán. Espere a que el indicador quede en verde e intente de nuevo.',ok:'Salir de todos modos',danger:true,fn:async()=>{await FB.auth.signOut()}};render();return}await FB.auth.signOut()},
   async setupOK(){if(!S.fb)return ACT0.setupOK();const nom=$('#su-nom').value.trim(),u=$('#su-usr').value.trim().toLowerCase(),pw=$('#su-pw').value;
     if(!nom||!okUser(u)){toast('Indique nombre y un usuario válido (3–40 letras minúsculas, números, punto o guion).','bad');return}if(pw.length<6){toast('La contraseña debe tener al menos 6 caracteres.','bad');return}
     S.bootstrapping=true;try{await FB.auth.createUserWithEmailAndPassword(em(u),pw);const db=FB.raw,b=db.batch();
@@ -1330,7 +1335,9 @@ async function importar(D){const db=FB.raw;const prog=m=>{S.resProg=m;S.gTab='da
 async function boot(){const cfg=window.FIREBASE_CONFIG;
   if(!cfg||!cfg.apiKey||!window.firebase){if(window.claude&&window.claude.use)return bootClaude();S.demo=true;S.db=memDB();S.uid='demo';S.owner=true;await seedDemo(S.db);S.boot='ok';subscribeDemo();render();return}
   S.fb=true;firebase.initializeApp(cfg);FB.auth=firebase.auth();const fs=firebase.firestore();
-  try{await fs.enablePersistence({synchronizeTabs:true})}catch(e){}
+  try{fs.settings({experimentalForceLongPolling:true,merge:true})}catch(e){console.warn(e)}
+  try{await fs.clearPersistence()}catch(e){}
+  window.addEventListener('online',()=>{S.offline=false;schedule()});window.addEventListener('offline',()=>{S.offline=true;schedule()});
   FB.raw=fs;S.db=fbAdapter(fs);
   const sec=firebase.initializeApp(cfg,'secundaria');FB.secAuth=sec.auth();try{await FB.secAuth.setPersistence(firebase.auth.Auth.Persistence.NONE)}catch(e){}
   try{const sn=await fs.doc('config/sistema').get();S.inicializado=sn.exists}catch(e){S.inicializado=true;console.warn(e)}
