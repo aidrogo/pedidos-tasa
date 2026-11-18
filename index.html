@@ -187,6 +187,46 @@ body{background:linear-gradient(rgba(21,67,120,.035) 1px,transparent 1px) 0 0/28
 .rb .arm-w{transform-origin:96px 92px;animation:wave 3.5s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.bot .rb,.bot .gear,.dots i,.st.cur:before,.st.cur .c,.rb .arm-w{animation:none}}
 @media (max-width:860px){.bot{padding:8px 10px 8px 6px;gap:10px}.bot .rbw,.bot .rb{width:52px;height:56px}.bubble{font-size:13px;padding:8px 11px}.bot .chips{display:none}.st{font-size:10px}.st .c{width:24px;height:24px;font-size:11px}.st:before{top:11px}}
+/* ---- Ajustes para celular ---- */
+html,body{max-width:100%;overflow-x:hidden}
+.layout,main,.card,.grid>*{min-width:0}
+.card table{max-width:100%}
+@media (max-width:860px){
+  html{-webkit-text-size-adjust:100%}
+  input,select,textarea{font-size:16px}
+  [style*="grid-template-columns"]{grid-template-columns:minmax(0,1fr)!important}
+  .top{padding:8px 10px;gap:8px}
+  .top .brand{font-size:15px;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .top select{display:none}
+  .top .who{font-size:11px;line-height:1.2;max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .top .btn.s{padding:4px 8px}
+  main{padding:10px 10px 96px}
+  h1{font-size:18px}
+  .head{gap:8px;margin-bottom:10px}
+  .head .btn{padding:7px 10px;font-size:13px}
+  .card{padding:12px;margin-bottom:10px}
+  .kpi{padding:10px}.kpi b{font-size:22px}.kpi span{font-size:12px}
+  .bars .b{grid-template-columns:96px 1fr 26px}
+  .tabs{overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+  .tabs button{flex-shrink:0;padding:8px 10px}
+  table.rs tr{padding:4px 2px}
+  table.rs td{flex-wrap:wrap;word-break:break-word}
+  table.rs td input,table.rs td select{max-width:62%;min-width:0}
+  .scroll{-webkit-overflow-scrolling:touch}
+  .modal{padding:14px;border-radius:12px}
+  .modal h2{font-size:16px}
+  .mfoot{justify-content:stretch}.mfoot .btn{flex:1 1 auto;justify-content:center}
+  .result{font-size:24px}
+  .row{gap:6px}
+  .issues li{font-size:13px}
+  .toast{bottom:92px;font-size:13px}
+  nav.bottom button{min-width:62px;padding:6px 4px}
+}
+@media (max-width:420px){.kpis{gap:8px}.bars .b{grid-template-columns:84px 1fr 24px;font-size:11px}}
+.top .bs{display:none}
+@media (max-width:860px){.top .bl{display:none}.top .bs{display:inline}
+  nav.bottom{overflow-x:visible}nav.bottom button{flex:1 1 0;min-width:0;padding:6px 1px;font-size:9.5px}nav.bottom svg{width:20px;height:20px}
+  nav.bottom span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}}
 </style>
 </head>
 <body>
@@ -386,7 +426,7 @@ function render(){
   const v=S.view, nv=navItems();const c=miCuenta()||{};
   const nav=cls=>`<nav class="${cls}">${nv.map(([k,l])=>`<button class="${(v===k||(k==='solicitudes'&&v==='detalle'&&!S.isNew)||(k==='nueva'&&v==='detalle'&&S.isNew))?'on':''}" data-act="go" data-v="${k}">${IC[k]}<span>${l}</span></button>`).join('')}</nav>`;
   const emp=empBy(myEmpresa());
-  a.innerHTML=`<div class="top"><div class="brand"><img class="logo" src="${LOGO_S}" alt="TASA">Pedidos de Material<span class="nm" style="font-weight:400;opacity:.8">&nbsp;· Astillero TASA</span></div><div class="sp"></div>
+  a.innerHTML=`<div class="top"><div class="brand"><img class="logo" src="${LOGO_S}" alt="TASA"><span class="bl">Pedidos de Material</span><span class="bs">Pedidos TASA</span><span class="nm" style="font-weight:400;opacity:.8">&nbsp;· Astillero TASA</span></div><div class="sp"></div>
    ${S.realRole==='admin'?`<select data-ch="viewAs" title="Ver la app como otro rol">${rolesList().map(r=>`<option value="${esc(r.id)}" ${S.role===r.id?'selected':''}>Ver como: ${esc(r.nombre)}</option>`).join('')}</select>`:''}
    ${S.realRole==='admin'&&S.viewAs&&!can('ver_todas')?`<select data-ch="viewEmp"><option value="">Empresa…</option>${S.empresas.map(e=>`<option value="${e.id}" ${myEmpresa()===e.id?'selected':''}>${esc(e.nombre)}</option>`).join('')}</select>`:''}
    ${S.fb?syncDot():''}<div class="who"><span class="nm">${esc(c.nombre||c.id)}<br></span><b>${esc(rolNombre(S.role))}</b>${emp?' · '+esc(emp.nombre):''}</div>
@@ -465,7 +505,7 @@ function vInicio(){
   return `<div class="head"><h1>Tablero</h1>${perSel()}<div class="sp"></div>${can('validar')?'<button class="btn" data-act="importXL">⬆ Importar Excel recibido</button>':''}${can('crear')?'<button class="btn a" data-act="go" data-v="nueva">+ Nueva solicitud</button>':''}</div>
   <div class="kpis">${K.map(([l,n,f,c])=>`<div class="kpi" style="--c:${c}" data-act="kpi" data-f="${f}"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
   <div class="grid g2"><div class="card"><h2>Solicitudes por estado</h2><div class="bars">${byE.map(([e,n])=>`<div class="b"><span>${chip(e)}</span><div class="t"><i style="width:${n/mx*100}%"></i></div><b>${n}</b></div>`).join('')}</div></div>
-  <div class="card"><h2>Por embarcación</h2>${Object.keys(embs).length?`<table><thead><tr><th>Embarcación</th><th>Proyecto</th><th>Solic.</th><th>Abiertas</th><th>Ítems</th></tr></thead><tbody>${Object.entries(embs).map(([k,v])=>`<tr class="click" data-act="kpiEmb" data-e="${esc(k)}"><td>${esc(k)}</td><td>${embBy(k)?chipP(estProy(embBy(k))):''}</td><td>${v.n}</td><td>${v.abiertas}</td><td>${v.items}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Sin solicitudes todavía.</div>'}</div></div>
+  <div class="card"><h2>Por embarcación</h2>${Object.keys(embs).length?`<div class="scroll"><table><thead><tr><th>Embarcación</th><th>Proyecto</th><th>Solic.</th><th>Abiertas</th><th>Ítems</th></tr></thead><tbody>${Object.entries(embs).map(([k,v])=>`<tr class="click" data-act="kpiEmb" data-e="${esc(k)}"><td>${esc(k)}</td><td>${embBy(k)?chipP(estProy(embBy(k))):''}</td><td>${v.n}</td><td>${v.abiertas}</td><td>${v.items}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sin solicitudes todavía.</div>'}</div></div>
   <div class="card"><h2>Requieren acción</h2>${accion.length?tablaSol(accion,issuesOf):'<div class="empty">Nada pendiente. 👍</div>'}</div>`}
 function tablaSol(L,issuesOf){return `<div class="scroll"><table class="rs"><thead><tr><th>Fecha</th><th>Periodo</th><th>Embarcación</th><th>Sistema</th><th>Grafo / Pos</th><th>Actividad</th><th>Empresa</th><th>Ítems</th><th>Reserva</th><th>Estado</th><th>Revisión</th></tr></thead><tbody>
   ${L.map(s=>{const is=issuesOf?issuesOf(s):revisar(s);const er=is.filter(i=>i.n==='error').length,av=is.filter(i=>i.n==='aviso').length;const e=empBy(s.empresaId);
@@ -761,7 +801,7 @@ function calcOut(calc,vals){const vars={...calc.consts,N:1};const warns=[];
   try{const r=evalFormula(calc.formula,vars);return {r:Math.round(r*1000)/1000,warns,vars}}catch(e){return {err:e.message}}}
 function mCalc(M){const m=M.mat,c=M.calc,o=calcOut(c,M.vals);
   return `<h2>Calcular cantidad — ${esc(m.desc)}</h2><div class="small muted" style="margin-bottom:10px">Código <span class="mono">${esc(m.codigo)}</span> · Fórmula <span class="formula">${esc(c.formula)}</span> · ${esc(constsTxt(c.consts))}</div>
-  <div class="grid g3">${c.inputs.map(k=>{const d=INPUTS[k]||{label:k},v=M.vals[k]||{};return `<div><label>${esc(d.label)}</label><div class="row" style="flex-wrap:nowrap"><input inputmode="decimal" data-b="modal.vals.${k}.v" data-rr="1" value="${esc(v.v??'')}">${d.dim?`<select style="width:76px" data-b="modal.vals.${k}.u" data-rr="1">${['mm','cm','m'].map(u=>`<option ${v.u===u?'selected':''}>${u}</option>`).join('')}</select>`:''}</div></div>`}).join('')}</div>
+  <div class="grid g3">${c.inputs.map(k=>{const d=INPUTS[k]||{label:k},v=M.vals[k]||{};return `<div><label>${esc(d.label)}</label><div class="row" style="flex-wrap:nowrap"><input inputmode="decimal" data-b="modal.vals.${k}.v" data-rr="1" value="${esc(v.v??'')}">${d.dim?`<select style="width:92px;flex-shrink:0" data-b="modal.vals.${k}.u" data-rr="1">${['mm','cm','m'].map(u=>`<option ${v.u===u?'selected':''}>${u}</option>`).join('')}</select>`:''}</div></div>`}).join('')}</div>
   ${o.err?`<div class="warn">${esc(o.err)}</div>`:`<div style="margin-top:14px"><span class="muted small">Resultado</span><div class="result">${fmt(o.r)} <span style="font-size:16px">${esc(m.um)}</span></div>${o.warns.map(w=>`<div class="warn">⚠ ${esc(w)}</div>`).join('')}</div>`}
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="calcOK" ${o.err?'disabled':''}>Usar ${o.err?'':fmt(o.r)+' '+esc(m.um)}</button></div>`}
 function mRef(M){return `<h2>Material referencial (sin código)</h2><p class="small muted" style="margin-top:-8px">Describa el material lo mejor posible. El planificador le asignará el código SAP antes de la carga.</p>
