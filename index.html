@@ -320,7 +320,7 @@ function parseObs(obs){const s=String(obs||'').toLowerCase().replace(',','.');
 
 /* ============ Estado ============ */
 const S={boot:'loading',demo:false,db:null,user:null,dl:null,uid:null,owner:false,role:null,realRole:null,
-  materiales:[],embarcaciones:[],solicitudes:[],plantSol:[],notifs:[],empresas:[],cuentas:[],creds:{},claves:[],sesiones:[],rolesCfg:null,periodos:null,cargos:null,plantillas:null,
+  materiales:[],embarcaciones:[],solicitudes:[],plantSol:[],unidades:null,notifs:[],empresas:[],cuentas:[],creds:{},claves:[],sesiones:[],rolesCfg:null,periodos:null,cargos:null,plantillas:null,
   sesion:undefined,cuenta:null,per:'',
   view:'inicio',sel:null,draft:null,dirty:false,modal:null,filt:{q:'',estado:'',emb:'',empresa:''},matTab:'cat',matQ:'',gTab:'cuenta',loaded:{},stale:false};
 const rolesList=()=>(S.rolesCfg&&S.rolesCfg.length)?S.rolesCfg:DEF_ROLES;
@@ -382,7 +382,7 @@ function subscribeDemo(){
   col('credenciales','creds',l=>{const m={};l.forEach(c=>m[c.id]=c);S.creds=m});
   if(S.owner){col('claves','claves');col('sesiones','sesiones')}
   const cfg=(id,key)=>S.db.doc('config/'+id).onSnapshot(sn=>{S[key]=sn.exists?clone(sn.data().list):null;afterData()},()=>{});
-  cfg('plantillas','plantillas');cfg('roles','rolesCfg');cfg('periodos','periodos');cfg('cargos','cargos');
+  cfg('plantillas','plantillas');cfg('roles','rolesCfg');cfg('periodos','periodos');cfg('cargos','cargos');cfg('unidades','unidades');
   if(S.uid)S.db.doc('sesiones/'+S.uid).onSnapshot(sn=>{S.sesion=sn.exists?clone(sn.data()):null;afterData()},()=>{S.sesion=null;afterData()});
   else S.sesion=null;
 }
@@ -598,14 +598,14 @@ function vDetalle(){const s=S.draft;if(!s)return '<div class="empty">Seleccione 
    ${s.items.map((it,i)=>{const m=matBy(it.codigo),ref=!!it.refId&&!it.codigo;return `<tr><td data-l="#">${i+1}</td>
     <td data-l="Código" class="mono">${ref?'<span class="chip ref">REFERENCIAL</span>':esc(it.codigo)}</td>
     <td data-l="Descripción">${esc(it.desc)}${it.fotoId?` <button class="btn s" data-act="verFoto" data-id="${esc(it.fotoId)}">📷</button>`:''}${it.espec?`<div class="small muted">${esc(it.espec)}</div>`:''}</td>
-    <td data-l="UM">${ed&&!m&&it.codigo&&can('validar')?`<select data-b="draft.items.${i}.um">${UMS.concat(UMS.includes(it.um)?[]:[it.um]).map(u=>`<option ${u===it.um?'selected':''}>${esc(u)}</option>`).join('')}</select>`:`<b>${esc(it.um)}</b>`}</td>
+    <td data-l="UM">${ed&&!m&&it.codigo&&can('validar')?`<select data-b="draft.items.${i}.um">${umOpts(it.um)}</select>`:`<b>${esc(it.um)}</b>`}</td>
     <td data-l="Cantidad"><div class="row" style="flex-wrap:nowrap">${ed?`<input class="mono" style="width:90px" data-b="draft.items.${i}.cantidad" value="${esc(it.cantidad)}" inputmode="decimal">`:`<b class="mono">${esc(it.cantidad)}</b>`}${ed&&m&&m.calc?`<button class="btn s" data-act="calcItem" data-i="${i}" title="Calcular por medidas">📐</button>`:''}</div></td>
     <td data-l="Observaciones">${ed?`<input data-b="draft.items.${i}.obs" value="${esc(it.obs)}">`:esc(it.obs)}</td>
     <td data-l="Reserva">${reservaEd?`<input class="mono" style="width:100px" data-b="draft.items.${i}.reserva" value="${esc(it.reserva)}">`:`<span class="mono">${esc(it.reserva||'—')}</span>`}</td>
     <td data-l="Posición">${reservaEd?`<input class="mono" style="width:60px" data-b="draft.items.${i}.posicion" value="${esc(it.posicion)}">`:`<span class="mono">${esc(it.posicion||'—')}</span>`}</td>
     <td data-l="Estado SAP">${reservaEd&&!['Borrador','Observada'].includes(s.estado)?`<select data-ch="estSap" data-i="${i}" style="min-width:120px">${EST_SAP.map(x=>`<option value="${x}" ${(it.estado||'')===x?'selected':''}>${x||'—'}</option>`).join('')}</select>${isBloq(it)&&it.bloqueo&&it.bloqueo.desde?`<div class="small muted">${diasDesde(it.bloqueo.desde)} día(s)</div>`:''}`:(chipSap(it.estado)||'<span class="muted">—</span>')}</td>
     <td>${ed?`<button class="btn s d" data-act="delItem" data-i="${i}">✕</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Agregue materiales con el buscador. Si no lo encuentra, regístrelo como referencial.</div>'}
-   ${ed?'<div class="row" style="margin-top:10px"><button class="btn" data-act="refModal">+ No encuentro el material (referencial)</button></div>':''}</div>
+   ${ed?'<div class="row" style="margin-top:10px"><button class="btn" data-act="refModal">+ No encuentro el material (referencial)</button><button class="btn" data-act="impLista">⬆ Importar lista (Excel)</button></div>':''}</div>
   </div><div>
   <div class="card" id="rev-card">${revHTML(s,ed)}</div>
   <div class="card"><h2>Acciones</h2><div class="grid" id="acc-card">${acciones(s,err)}</div></div>
@@ -675,11 +675,11 @@ function vEmb(){const ed=can('editar_emb');const f=S.embF||'';
 
 /* ---------- Gestión ---------- */
 function vGestion(){const adm=can('usuarios'),T=[['cuenta','Mi cuenta']];
-  if(adm)T.push(['usuarios','Usuarios'],['empresas','Empresas'],['roles','Roles'],['periodos','Periodos'],['cargos','Cargos']);
+  if(adm)T.push(['usuarios','Usuarios'],['empresas','Empresas'],['roles','Roles'],['periodos','Periodos'],['cargos','Cargos'],['unidades','Unidades']);
   if(can('validar'))T.push(['alertas','Alertas'+(S.notifs.filter(n=>n.estado!=='enviada').length?' ('+S.notifs.filter(n=>n.estado!=='enviada').length+')':'')]);
   if(can('eliminar'))T.push(['datos','Eliminar datos']);
   if(!T.some(t=>t[0]===S.gTab))S.gTab='cuenta';
-  const body={cuenta:gCuenta,usuarios:gUsuarios,alertas:gAlertas,empresas:gEmpresas,roles:gRoles,periodos:gPeriodos,cargos:gCargos,datos:gDatos}[S.gTab]();
+  const body={cuenta:gCuenta,usuarios:gUsuarios,alertas:gAlertas,unidades:gUnidades,empresas:gEmpresas,roles:gRoles,periodos:gPeriodos,cargos:gCargos,datos:gDatos}[S.gTab]();
   return `<div class="head"><h1>Gestión</h1></div><div class="tabs" style="overflow-x:auto">${T.map(([k,l])=>`<button class="${S.gTab===k?'on':''}" data-act="gTab" data-t="${k}">${l}</button>`).join('')}</div>${body}`}
 const soloProp=()=>S.owner?'':'<div class="warn" style="margin-bottom:10px">Solo la propietaria del enlace puede guardar cambios en usuarios y roles.</div>';
 function gCuenta(){const c=miCuenta()||{},cr=S.creds[c.id]||{};const M=S.mc||(S.mc={a:'',n:'',r:'',c1:cr.correo1||'',c2:cr.correo2||'',c3:cr.correo3||''});
@@ -826,10 +826,51 @@ function vBloqueos(){const f=S.bqF||'';let L=bloqueosTodos();if(f)L=L.filter(x=>
 async function guardarItemSol(sid,i,fn,msg){const s=S.solicitudes.find(x=>x.id===sid);if(!s)return;const c=clone(s);fn(c.items[i],c);if(msg)hist(c,msg);c.updatedAt=nowISO();
   if(c.items.every(x=>x.reserva||isBloq(x))&&c.items.some(x=>x.reserva)&&['Validada','Exportada'].includes(c.estado))c.estado='Reservada';
   const b=clone(c);delete b.id;await setDoc('solicitudes/'+sid,b);if(S.draft&&S.draft.id===sid&&!S.dirty){S.draft=clone(c)}}
+
+/* ============ Unidades de medida configurables ============ */
+const DEF_UMS=[['UN','Unidad'],['PZA','Pieza'],['JGO','Juego'],['PAR','Par'],['KIT','Kit'],['CJA','Caja'],['PQT','Paquete'],['BOL','Bolsa'],['ROL','Rollo'],['FCO','Frasco'],['TUB','Tubo (envase)'],['GLN','Galón'],['L','Litro'],['LT','Litro'],['ML','Mililitro'],['BAL','Balde'],['CIL','Cilindro'],['M','Metro'],['CM','Centímetro'],['MM','Milímetro'],['M2','Metro cuadrado'],['M3','Metro cúbico'],['KG','Kilogramo'],['G','Gramo'],['TON','Tonelada'],['PL','Plancha'],['HOJ','Hoja'],['PLG','Pliego'],['BAR','Barra'],['CTO','Ciento'],['MLL','Millar'],['SRV','Servicio']];
+function umsInfo(){const base=(S.unidades&&S.unidades.length)?S.unidades:DEF_UMS.map(([u,d])=>({u,d}));const m=new Map(base.map(x=>[x.u,x.d||'']));
+  S.materiales.forEach(x=>{if(x.um&&!m.has(x.um))m.set(x.um,'(en catálogo)')});return [...m.entries()].map(([u,d])=>({u,d}))}
+function umsList(extra){const l=umsInfo().map(x=>x.u);if(extra&&!l.includes(extra))l.push(extra);return l}
+const umOpts=(cur)=>umsList(cur).map(u=>`<option ${u===cur?'selected':''}>${esc(u)}</option>`).join('');
+const umNorm=u=>String(u||'').trim().toUpperCase().replace(/\s+/g,'').replace(/\.$/,'');
+async function agregarUM(u,d){u=umNorm(u);if(!u||!can('usuarios'))return;const L=umsInfo().filter(x=>x.d!=='(en catálogo)');if(L.some(x=>x.u===u))return;L.push({u,d:d||''});await setDoc('config/unidades',{list:L}).catch(()=>{})}
+function gUnidades(){const L=S.umEd||(S.umEd=clone(umsInfo()));
+  return `<div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Unidades de medida (${L.length})</h2><div style="flex:1"></div><button class="btn s" data-act="umAdd">+ Unidad</button><button class="btn s p" data-act="umOK">Guardar unidades</button></div>
+  <p class="small muted" style="margin-top:-4px">Use el mismo código que SAP (ej. KG, M2, JGO). Las unidades que ya existen en el catálogo aparecen automáticamente.</p>
+  <div class="grid g3">${L.map((x,i)=>`<div class="row" style="flex-wrap:nowrap"><input class="mono" style="width:90px" data-b="umEd.${i}.u" value="${esc(x.u)}" placeholder="COD"><input data-b="umEd.${i}.d" value="${esc(x.d==='(en catálogo)'?'':x.d)}" placeholder="Descripción"><span class="small muted" style="white-space:nowrap">${S.materiales.filter(m=>m.um===x.u).length}</span><button class="btn s d" data-act="umDel" data-i="${i}" ${S.materiales.some(m=>m.um===x.u)?'disabled title="Hay materiales con esta unidad"':''}>✕</button></div>`).join('')}</div></div>`}
+
+/* ============ Importar lista de materiales (contrata) ============ */
+function filasLista(rows){return rows.map(r=>({codigo:String(cell(r.codigo||r.codigosap||r.material||r.cod||'')).trim(),desc:String(cell(r.textobrevedematerial||r.descripcion||r.textobreve||r.material_descripcion||r.desc||'')).trim(),
+  um:umNorm(cell(r.unmedidadeentrada||r.um||r.unidad||r.unidaddemedida||'')),cantidad:String(cell(r.cantidad||r.cant||r.qty||'')).replace(',','.').trim(),obs:String(cell(r.observaciones||r.obs||r.observacion||r.medidas||'')).trim()}))
+  .filter(r=>r.codigo||r.desc)}
+function parsePegado(txt){const lines=String(txt||'').split(/\r?\n/).map(l=>l.split('\t')).filter(c=>c.some(x=>x.trim()));if(!lines.length)return [];
+  const h=lines[0].map(norm);const conCab=h.some(x=>/cod|desc|cant|texto|unid|obs/.test(x));
+  if(conCab)return filasLista(lines.slice(1).map(c=>{const o={};h.forEach((k,i)=>o[k]=c[i]||'');return o}));
+  return filasLista(lines.map(c=>({codigo:c[0]||'',descripcion:c[1]||'',cantidad:c[2]||'',observaciones:c[3]||'',um:c[4]||''})))}
+function emparejar(f){let m=f.codigo&&matBy(f.codigo),tipo='codigo';
+  if(!m&&f.desc){const nd=norm(f.desc);m=S.materiales.find(x=>!x.ref&&norm(x.desc)===nd);tipo='desc';
+    if(!m){const r=buscarMat(f.desc.split(/\s+/).slice(0,4).join(' '),{max:2});if(r.total===1){m=r.list[0];tipo='sug'}}}
+  const q=num(f.cantidad);const avisos=[];if(!(q>0))avisos.push('cantidad no válida');
+  if(m&&f.um&&f.um!==m.um)avisos.push(`UM ${f.um} → se usa ${m.um}`);if(f.codigo&&!m)avisos.push('código no está en catálogo');
+  return {...f,m:m||null,tipo:m?tipo:'ref',avisos,ok:q>0&&(!!m||!!f.desc),usar:q>0&&(!!m||!!f.desc)}}
+function mImpLista(M){const R=M.rows||[];const n=R.filter(r=>r.usar).length,nref=R.filter(r=>r.usar&&!r.m).length;
+  return `<h2>Importar lista de materiales</h2>
+  <p class="small muted" style="margin-top:-8px">Suba un Excel con columnas <b>Código</b>, <b>Descripción</b>, <b>Cantidad</b> y opcionalmente <b>UM</b> y <b>Observaciones</b>, o copie las filas desde Excel y péguelas abajo. Los códigos se buscan en el catálogo; si no hay código se busca por descripción, y lo que no se encuentre se agrega como material referencial.</p>
+  <div class="row"><input type="file" accept=".xlsx,.xls,.csv" data-ch="impListaFile" style="flex:1;min-width:200px"><button class="btn s" data-act="plantillaLista">⬇ Descargar plantilla</button></div>
+  <label style="margin-top:10px">O pegue aquí las filas copiadas de Excel</label><textarea rows="4" data-b="modal.txt" placeholder="31015349&#9;LIJA FIERRO NRO.40-3&#9;9&#10;&#9;PLANCHA AC.NAVAL 12.5MM&#9;1&#9;320 x 1500">${esc(M.txt||'')}</textarea>
+  <div class="row" style="margin-top:6px"><button class="btn s" data-act="impListaPaste">Procesar texto pegado</button></div>
+  ${R.length?`<div class="scroll" style="margin-top:12px;max-height:46vh;overflow:auto"><table class="rs"><thead><tr><th></th><th>Archivo</th><th>Se agregará como</th><th>Cant.</th><th>Avisos</th></tr></thead><tbody>${R.map((r,i)=>`<tr>
+   <td data-l="Usar"><input type="checkbox" style="width:auto" data-ch="impUsar" data-i="${i}" ${r.usar?'checked':''} ${r.ok?'':'disabled'}></td>
+   <td data-l="Archivo" class="small"><span class="mono">${esc(r.codigo||'—')}</span> ${esc(r.desc)}${r.um?` <span class="muted">(${esc(r.um)})</span>`:''}</td>
+   <td data-l="Se agregará como" class="small">${r.m?`${r.tipo==='codigo'?'✅':r.tipo==='desc'?'✅':'≈'} <span class="mono">${esc(r.m.codigo)}</span> ${esc(r.m.desc)} <b>${esc(r.m.um)}</b>${r.tipo==='sug'?' <span class="chip ref">sugerido</span> <button class="btn s" data-act="impComoRef" data-i="${i}">No es este → referencial</button>':''}`:`<span class="chip ref">REFERENCIAL</span> ${esc(r.desc||r.codigo)}`}</td>
+   <td data-l="Cant." class="mono">${esc(r.cantidad)}</td><td data-l="Avisos" class="small" style="color:var(--warn)">${esc(r.avisos.join(' · '))}</td></tr>`).join('')}</tbody></table></div>
+   <div class="small" style="margin-top:8px"><b>${n}</b> material(es) a agregar${nref?` · <b>${nref}</b> como referencial(es)`:''}.</div>`:''}
+  <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="impListaOK" ${n?'':'disabled'}>Agregar ${n} material(es)</button></div>`}
 /* ============ Modales ============ */
 function modalHTML(){const M=S.modal;let body='';
   if(M.t==='calc')body=mCalc(M);else if(M.t==='ref')body=mRef(M);else if(M.t==='mat')body=mMat(M);else if(M.t==='emb')body=mEmb(M);
-  else if(M.t==='reserva')body=mReserva(M);else if(M.t==='obs')body=mObs(M);else if(M.t==='emp')body=mEmp(M);else if(M.t==='user')body=mUser(M);else if(M.t==='plantSave')body=mPlantSave(M);else if(M.t==='plantEdit')body=mPlantEdit(M);else if(M.t==='nuevaDesde')body=mNuevaDesde(M);else if(M.t==='alerta')body=mAlerta(M);else if(M.t==='tpl')body=mTpl(M);
+  else if(M.t==='reserva')body=mReserva(M);else if(M.t==='obs')body=mObs(M);else if(M.t==='emp')body=mEmp(M);else if(M.t==='user')body=mUser(M);else if(M.t==='plantSave')body=mPlantSave(M);else if(M.t==='plantEdit')body=mPlantEdit(M);else if(M.t==='nuevaDesde')body=mNuevaDesde(M);else if(M.t==='alerta')body=mAlerta(M);else if(M.t==='impLista')body=mImpLista(M);else if(M.t==='tpl')body=mTpl(M);
   else if(M.t==='foto')body=`<h2>Foto referencial</h2>${M.src?`<img src="${esc(M.src)}" style="max-width:100%;border-radius:8px">`:'Cargando…'}<div class="mfoot"><button class="btn" data-act="closeM">Cerrar</button></div>`;
   else if(M.t==='asignar')body=mAsignar(M);else if(M.t==='confirm')body=`<h2>${esc(M.title)}</h2><p>${esc(M.msg)}</p><div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn ${M.danger?'d':'p'}" data-act="confirmOK">${esc(M.ok||'Aceptar')}</button></div>`;
   else if(M.t==='info')body=`<h2>${esc(M.title)}</h2><div>${M.html}</div><div class="mfoot"><button class="btn p" data-act="closeM">Entendido</button></div>`;
@@ -844,14 +885,14 @@ function mCalc(M){const m=M.mat,c=M.calc,o=calcOut(c,M.vals);
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="calcOK" ${o.err?'disabled':''}>Usar ${o.err?'':fmt(o.r)+' '+esc(m.um)}</button></div>`}
 function mRef(M){return `<h2>Material referencial (sin código)</h2><p class="small muted" style="margin-top:-8px">Describa el material lo mejor posible. El planificador le asignará el código SAP antes de la carga.</p>
   <div class="grid"><div><label>Descripción *</label><input data-b="modal.v.desc" value="${esc(M.v.desc)}" placeholder="Ej. VÁLVULA CHECK BRONCE 2&quot; NPT"></div>
-  <div class="grid g3"><div><label>UM *</label><select data-b="modal.v.um">${UMS.map(u=>`<option ${M.v.um===u?'selected':''}>${u}</option>`).join('')}</select></div><div><label>Cantidad *</label><input inputmode="decimal" data-b="modal.v.cantidad" value="${esc(M.v.cantidad)}"></div><div><label>Observaciones</label><input data-b="modal.v.obs" value="${esc(M.v.obs)}"></div></div>
+  <div class="grid g3"><div><label>UM *</label><select data-b="modal.v.um">${umOpts(M.v.um)}</select></div><div><label>Cantidad *</label><input inputmode="decimal" data-b="modal.v.cantidad" value="${esc(M.v.cantidad)}"></div><div><label>Observaciones</label><input data-b="modal.v.obs" value="${esc(M.v.obs)}"></div></div>
   <div><label>Especificación / marca / código del fabricante</label><textarea data-b="modal.v.espec" rows="2">${esc(M.v.espec)}</textarea></div>
   <div><label>Foto o imagen de referencia (opcional)</label><input type="file" accept="image/*" data-ch="refFoto">${M.v.foto?`<img class="thumb" style="margin-top:6px" src="${esc(M.v.foto)}">`:''}</div></div>
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="refOK">Agregar</button></div>`}
 function mMat(M){const v=M.v,c=v.calc;let test='';
   if(c){const o=calcOut(c,M.test||{});test=o.err?`<span class="muted small">${esc(o.err)}</span>`:`<b>${fmt(o.r)} ${esc(v.um)}</b>${o.warns.map(w=>`<div class="warn">${esc(w)}</div>`).join('')}`}
   return `<h2>${M.isNew?'Nuevo material':'Editar material'}</h2><div class="grid">
-  <div class="grid g3"><div><label>Código SAP *</label><input class="mono" data-b="modal.v.codigo" value="${esc(v.codigo)}" ${M.isNew?'':'disabled'}></div><div><label>UM *</label><select data-b="modal.v.um">${UMS.concat(UMS.includes(v.um)?[]:[v.um]).map(u=>`<option ${v.um===u?'selected':''}>${esc(u)}</option>`).join('')}</select></div><div><label>Categoría</label><input list="catList" data-b="modal.v.cat" value="${esc(v.cat||'')}"><datalist id="catList">${[...new Set(CATS.concat(S.materiales.map(m=>m.cat).filter(Boolean)))].map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div></div>
+  <div class="grid g3"><div><label>Código SAP *</label><input class="mono" data-b="modal.v.codigo" value="${esc(v.codigo)}" ${M.isNew?'':'disabled'}></div><div><label>UM *${can('usuarios')?' <span class="muted" style="font-weight:400">(escriba una nueva si no existe)</span>':''}</label>${can('usuarios')?`<input class="mono" list="umList" data-b="modal.v.um" value="${esc(v.um)}"><datalist id="umList">${umsInfo().map(x=>`<option value="${esc(x.u)}">${esc(x.d)}</option>`).join('')}</datalist>`:`<select data-b="modal.v.um">${umOpts(v.um)}</select>`}</div><div><label>Categoría</label><input list="catList" data-b="modal.v.cat" value="${esc(v.cat||'')}"><datalist id="catList">${[...new Set(CATS.concat(S.materiales.map(m=>m.cat).filter(Boolean)))].map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div></div>
   <div><label>Texto breve de material *</label><input data-b="modal.v.desc" value="${esc(v.desc)}"></div>
   <div class="card" style="background:#f8fafc;margin:0"><div class="row"><label style="margin:0">Cálculo por medidas</label><select style="width:auto" data-ch="matTpl"><option value="">Sin cálculo</option>${tpls().map(t=>`<option value="${esc(t.id)}" ${c&&c.tpl===t.id?'selected':''}>${esc(t.nombre)} (${esc(t.um)})</option>`).join('')}</select></div>
   ${c?`<div class="grid g2" style="margin-top:10px"><div><label>Fórmula (editable)</label><input class="mono" data-b="modal.v.calc.formula" data-rr="1" value="${esc(c.formula)}"></div><div><label>Constantes de este material</label><input class="mono" data-ch="matConsts" value="${esc(constsTxt(c.consts))}" placeholder="PL=1.5; PA=1.5"></div></div>
@@ -906,7 +947,7 @@ function mNuevaDesde(M){const q=norm(M.q||'');const L=plantVis().filter(p=>!q||n
 function mEmp(M){const v=M.v;return `<h2>${M.isNew?'Nueva empresa':'Editar empresa'}</h2><div class="grid"><div><label>Nombre (como figura en “Empresa”)</label><input data-b="modal.v.nombre" value="${esc(v.nombre)}"></div><div class="grid g3">${[1,2,3].map(n=>`<div><label>Correo ${n}</label><input data-b="modal.v.correo${n}" value="${esc(v['correo'+n])}"></div>`).join('')}</div></div>
   <div class="mfoot">${!M.isNew?'<button class="btn d" data-act="empDel" style="margin-right:auto">Eliminar</button>':''}<button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="empOK">Guardar</button></div>`}
 function mTpl(M){const v=M.v;let test='';const o=calcOut(v,M.test||{});test=o.err?`<span class="muted small">${esc(o.err)}</span>`:`<b>${fmt(o.r)} ${esc(v.um)}</b>`;
-  return `<h2>${M.isNew?'Nueva plantilla':'Editar plantilla'}</h2><div class="grid"><div class="grid g2"><div><label>Nombre</label><input data-b="modal.v.nombre" value="${esc(v.nombre)}"></div><div><label>UM del resultado</label><select data-b="modal.v.um">${UMS.map(u=>`<option ${v.um===u?'selected':''}>${u}</option>`).join('')}</select></div></div>
+  return `<h2>${M.isNew?'Nueva plantilla':'Editar plantilla'}</h2><div class="grid"><div class="grid g2"><div><label>Nombre</label><input data-b="modal.v.nombre" value="${esc(v.nombre)}"></div><div><label>UM del resultado</label><select data-b="modal.v.um">${umOpts(v.um)}</select></div></div>
   <div><label>Medidas que se piden</label><div class="row">${Object.entries(INPUTS).map(([k,d])=>`<label style="display:flex;gap:4px;align-items:center;font-weight:500;margin:0"><input type="checkbox" style="width:auto" data-ch="tplIn" data-k="${k}" ${v.inputs.includes(k)?'checked':''}> ${k} — ${d.label}</label>`).join('')}</div></div>
   <div class="grid g2"><div><label>Fórmula</label><input class="mono" data-b="modal.v.formula" data-rr="1" value="${esc(v.formula)}"></div><div><label>Constantes por defecto</label><input class="mono" data-ch="tplConsts" value="${esc(constsTxt(v.consts))}"></div></div>
   <div class="row"><span class="small muted">Probar:</span>${v.inputs.map(k=>`<div style="width:120px"><input placeholder="${esc((INPUTS[k]||{}).label||k)}${(INPUTS[k]||{}).dim?' (mm)':''}" data-b="modal.test.${k}.v" data-rr="1" value="${esc(((M.test||{})[k]||{}).v||'')}"></div>`).join('')}<div>→ ${test}</div></div>
@@ -914,7 +955,7 @@ function mTpl(M){const v=M.v;let test='';const o=calcOut(v,M.test||{});test=o.er
   <div class="mfoot">${!M.isNew?'<button class="btn d" data-act="tplDel" style="margin-right:auto">Eliminar</button>':''}<button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="tplOK">Guardar</button></div>`}
 function mAsignar(M){return `<h2>Asignar código SAP</h2><p class="small muted">Material referencial: <b>${esc(M.ref.desc)}</b> (${esc(M.ref.um)})${M.ref.espec?' — '+esc(M.ref.espec):''}</p>
   <div><label>Buscar en catálogo o escribir un código nuevo</label><input id="asearch" data-live="1" class="mono" value="${esc(M.codigo||'')}" autocomplete="off" placeholder="Código SAP"><div id="aresults"></div></div>
-  <div class="grid g2" style="margin-top:10px"><div><label>Texto breve (si es código nuevo)</label><input data-b="modal.desc" value="${esc(M.desc)}"></div><div><label>UM</label><select data-b="modal.um">${UMS.map(u=>`<option ${M.um===u?'selected':''}>${u}</option>`).join('')}</select></div></div>
+  <div class="grid g2" style="margin-top:10px"><div><label>Texto breve (si es código nuevo)</label><input data-b="modal.desc" value="${esc(M.desc)}"></div><div><label>UM</label><select data-b="modal.um">${umOpts(M.um)}</select></div></div>
   <p class="small muted">Se reemplazará en todas las solicitudes que usan este referencial.</p>
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="asignarOK">Asignar</button></div>`}
 
@@ -1060,6 +1101,7 @@ const ACT={
   async matOK(){const v=S.modal.v;const code=String(v.codigo||'').trim();if(!/^[A-Za-z0-9_\-.]+$/.test(code)||!v.desc.trim()){toast('Código (solo letras/números) y descripción son obligatorios.','bad');return}
     if(S.modal.isNew&&matBy(code)){toast('Ese código ya existe.','bad');return}
     if(v.calc){try{evalFormula(v.calc.formula,{...v.calc.consts,L:1,A:1,D:1,N:1})}catch(e){toast('Fórmula: '+e.message,'bad');return}}
+    v.um=umNorm(v.um);if(!v.um){toast('Indique la unidad de medida.','bad');return}if(!umsList().includes(v.um))await agregarUM(v.um,'');
     const b={codigo:code,desc:v.desc.trim().toUpperCase(),um:v.um,cat:v.cat||'',calc:v.calc||null,actualizado:nowISO()};S.modal=null;render();await setDoc('materiales/'+code,b);toast('Material guardado')},
   matDel(){const v=S.modal.v;S.modal={t:'confirm',title:'Eliminar material',msg:`¿Eliminar ${v.codigo} — ${v.desc}?`,ok:'Eliminar',danger:true,fn:()=>delDoc('materiales/'+v.id)};render()},
   async importMat(){const f=await pickFile('.xlsx,.xls,.csv');if(!f)return;let rows;try{rows=await readXL(f)}catch(e){toast(e.message,'bad');return}
@@ -1103,12 +1145,27 @@ const ACT={
     const fotos={};let k=0;for(const id of fotoIds){const sn=await S.db.doc('fotos/'+id).get().catch(()=>null);if(sn&&sn.exists)fotos[id]=sn.data().data;k++;S.resProg=`Leyendo fotos ${k}/${fotoIds.size}…`;schedule()}
     const usuarios=S.cuentas.map(c=>{const cr=S.creds[c.id]||{},kv=claveDe(c.id);return {usuario:c.id,nombre:c.nombre,rol:c.rol,empresaId:c.empresaId||'',activo:c.activo!==false,correo1:cr.correo1||'',correo2:cr.correo2||'',correo3:cr.correo3||'',clave:kv?kv.clave:''}});
     const strip=l=>l.map(x=>{const o=clone(x);return o});
-    const data={formato:'pedidos-material-tasa',version:1,fecha:nowISO(),usuarios,roles:clone(rolesList()),config:{plantillas:clone(S.plantillas||null),periodos:clone(S.periodos||null),cargos:clone(S.cargos||null)},
+    const data={formato:'pedidos-material-tasa',version:1,fecha:nowISO(),usuarios,roles:clone(rolesList()),config:{plantillas:clone(S.plantillas||null),periodos:clone(S.periodos||null),cargos:clone(S.cargos||null),unidades:clone(S.unidades||null)},
       materiales:strip(S.materiales),embarcaciones:strip(S.embarcaciones),empresas:strip(S.empresas),solicitudes:strip(S.solicitudes),plantillasSol:strip(S.plantSol),notificaciones:strip(S.notifs),fotos};
     const ok=await saveFile('respaldo_pedidos_tasa_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(data));
     S.resProg=ok?`Respaldo descargado: ${usuarios.length} usuarios, ${data.materiales.length} materiales, ${data.solicitudes.length} solicitudes, ${Object.keys(fotos).length} fotos.`:'';render()},
   async exportarPost(){const d=S.draft;const pend=(d.items||[]).filter(i=>!i.reserva&&!sigueBloq(i));if(!pend.length||!window.XLSX)return;
     const ok=await saveFile(nombreArchivo(d).replace('.xlsx','_carga-posterior.xlsx'),buildXL(d,pend));if(ok){hist(d,`Generó Excel de carga posterior (${pend.length} ítems)`);await saveDraft(null,true);toast('Excel de carga posterior generado')}},
+  umAdd(){S.umEd.push({u:'',d:''});render()},
+  umDel(el){S.umEd.splice(+el.dataset.i,1);render()},
+  async umOK(){const L=[];const seen=new Set();for(const x of S.umEd){const u=umNorm(x.u);if(!u||seen.has(u))continue;seen.add(u);L.push({u,d:String(x.d||'').trim()})}
+    await setDoc('config/unidades',{list:L});S.umEd=null;render();toast(`${L.length} unidades guardadas`)},
+  impLista(){S.modal={t:'impLista',wide:true,rows:[],txt:''};render()},
+  impComoRef(el){const r=S.modal.rows[+el.dataset.i];r.m=null;r.tipo='ref';render()},
+  impListaPaste(){const R=parsePegado(S.modal.txt);if(!R.length){toast('No se reconocieron filas. Copie desde Excel las columnas Código, Descripción, Cantidad.','bad');return}S.modal.rows=R.map(emparejar);render()},
+  async plantillaLista(){if(!window.XLSX)return;const ws=XLSX.utils.aoa_to_sheet([['Código','Descripción','UM','Cantidad','Observaciones'],['31015349','LIJA FIERRO NRO.40-3','UN',9,''],['','PLANCHA AC.NAVAL 12.50X1.800X6000MM','',1,'320 x 1500']]);ws['!cols']=[{wch:12},{wch:44},{wch:8},{wch:10},{wch:24}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Lista');await saveFile('plantilla_lista_materiales.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}))},
+  async impListaOK(){const R=S.modal.rows.filter(r=>r.usar);const d=S.draft;let nref=0;S.modal=null;render();
+    for(const r of R){if(r.m){d.items.push({codigo:String(r.m.codigo),desc:r.m.desc,um:r.m.um,cantidad:fmt(num(r.cantidad)),obs:r.obs,reserva:'',posicion:''});continue}
+      const id='REF-'+rid(),desc=(r.desc||r.codigo).toUpperCase(),um=r.um&&umsList().includes(r.um)?r.um:(r.um||'UN');
+      await setDoc('materiales/'+id,{codigo:'',ref:true,estadoRef:'pendiente',desc,um,espec:r.codigo?'Código indicado por la contrata: '+r.codigo:'',fotoId:'',fecha:nowISO(),por:S.cuenta}).catch(()=>{});
+      d.items.push({codigo:'',refId:id,desc,um,cantidad:fmt(num(r.cantidad)),obs:r.obs,espec:r.codigo?'Código indicado: '+r.codigo:'',reserva:'',posicion:''});nref++}
+    hist(d,`Importó una lista de ${R.length} materiales`);S.dirty=true;render();autoSaveSoon();toast(`${R.length} material(es) agregados${nref?` (${nref} referencial${nref>1?'es':''})`:''}. Revise las cantidades.`)},
   async copiarRes(){const s=S.draft;const txt=(s.items||[]).map(i=>(i.reserva||'')+'\t'+(i.posicion||'')).join('\n');
     try{await navigator.clipboard.writeText(txt);toast('Copiado: péguelo en Excel o en su sistema')}catch(e){S.modal={t:'info',title:'Reservas y posiciones',html:`<p class="small">Seleccione todo y copie (Ctrl+C):</p><textarea rows="12" readonly>${esc(txt)}</textarea>`};render()}},
   async xlRes(){if(!window.XLSX)return;await saveFile(nombreArchivo(S.draft),buildXL(S.draft))},
@@ -1153,7 +1210,7 @@ const ACT={
     await setDoc('claves/'+S.uid,{porUsuario:pu}).catch(()=>{});
     await setDoc('sesiones/'+S.uid,{usuario:c.id,tag:hash.slice(0,16),t:nowISO()});S.loggingIn=null;S.mc=null;render();toast('Contraseña cambiada')},
   /* ---- Usuarios ---- */
-  gTab(el){S.gTab=el.dataset.t;S.rolesEd=null;S.perEd=null;S.carEd=null;render()},
+  gTab(el){S.gTab=el.dataset.t;S.rolesEd=null;S.perEd=null;S.carEd=null;S.umEd=null;render()},
   verPw(el){S.verPw=S.verPw||{};S.verPw[el.dataset.id]=!S.verPw[el.dataset.id];render()},
   userModal(el){const c=el.dataset.id&&S.cuentas.find(x=>x.id===el.dataset.id);const cr=c&&S.creds[c.id]||{};
     S.modal={t:'user',isNew:!c,pw:c?'':genPw(),v:c?{id:c.id,nombre:c.nombre||'',rol:c.rol,empresaId:c.empresaId||'',activo:c.activo===false?'0':'1',correo1:cr.correo1||'',correo2:cr.correo2||'',correo3:cr.correo3||''}:{id:'',nombre:'',rol:'solicitante',empresaId:'',activo:'1',correo1:'',correo2:'',correo3:''}};render()},
@@ -1210,6 +1267,8 @@ const ACT={
 };
 function confirmLeave(){return true}
 const CH={
+  async impListaFile(el){const f=el.files[0];if(!f)return;try{const rows=await readXL(f);const R=filasLista(rows);if(!R.length){toast('No se encontraron columnas Código / Descripción / Cantidad en el archivo.','bad');return}S.modal.rows=R.map(emparejar);render()}catch(e){toast('No se pudo leer el archivo: '+e.message,'bad')}},
+  impUsar(el){S.modal.rows[+el.dataset.i].usar=el.checked;render()},
   async estSap(el){const d=S.draft,i=+el.dataset.i,it=d.items[i],v=el.value;setEstSap(it,v);hist(d,`Código ${it.codigo}: ${v||'sin estado SAP'}`);
     if(d.items.every(x=>x.reserva||isBloq(x))&&d.items.some(x=>x.reserva)&&['Validada','Exportada'].includes(d.estado))d.estado='Reservada';
     await saveDraft(null);marcarCatalogo(it.codigo,v);toast(`${it.codigo}: ${v||'sin estado'}`)},
@@ -1311,7 +1370,7 @@ function subscribeFB(){const db=FB.raw;const t=setTimeout(()=>{S.stale=true;rend
   col('cuentas','cuentas',l=>{S.cuentas=l;const m={};l.forEach(c=>m[c.id]=c);S.creds=m});
   col('rolesCfg','rolesCfg',l=>{S.rolesCfg=l.sort((a,b)=>(a.orden??99)-(b.orden??99)).map(r=>({id:r.id,nombre:r.nombre,permisos:r.permisos||[]}))});
   if(S.me&&S.me.rol==='admin')col('claves','claves');
-  ['plantillas','periodos','cargos'].forEach(id=>subs.push(db.doc('config/'+id).onSnapshot(sn=>{S[id==='plantillas'?'plantillas':id]=sn.exists?clone(sn.data().list):null;afterData()},()=>{})))}
+  ['plantillas','periodos','cargos','unidades'].forEach(id=>subs.push(db.doc('config/'+id).onSnapshot(sn=>{S[id==='plantillas'?'plantillas':id]=sn.exists?clone(sn.data().list):null;afterData()},()=>{})))}
 function ensureSolSub(){if(!S.loaded.rolesCfg||!S.loaded.cuentas)return;const c=S.cuentas.find(x=>x.id===S.cuenta);if(!c)return;
   const r=rolBy(c.rol);const todas=c.rol==='admin'||(r&&(r.permisos||[]).includes('ver_todas'));const key=c.rol+'|'+(c.empresaId||'')+'|'+todas;if(key===solKey)return;
   if(S.solUnsub)S.solUnsub.forEach(u=>u());S.solUnsub=[];solKey=key;const db=FB.raw;
@@ -1404,7 +1463,7 @@ async function importar(D){const db=FB.raw;const prog=m=>{S.resProg=m;S.gTab='da
     await db.doc('claves/'+u.usuario).set({usuario:u.usuario,clave:pw,t:nowISO(),por:'admin'});await sleep(150)}
   /* 2. Roles y configuración */
   prog('Roles y configuración…');{const b=db.batch();(D.roles||[]).forEach((r,k)=>b.set(db.doc('rolesCfg/'+r.id),{nombre:r.nombre,permisos:r.id==='admin'?Object.keys(PERMS):(r.permisos||[]),orden:k}));
-    for(const k of ['plantillas','periodos','cargos'])if(D.config&&D.config[k])b.set(db.doc('config/'+k),{list:D.config[k]});await b.commit()}
+    for(const k of ['plantillas','periodos','cargos','unidades'])if(D.config&&D.config[k])b.set(db.doc('config/'+k),{list:D.config[k]});await b.commit()}
   /* 3. Catálogo en bloques */
   prog('Catálogo de materiales…');const porChunk={};const refs=[];for(const m of D.materiales||[]){const o=clone(m);const id=o.id;delete o.id;if(o.ref)refs.push([id,o]);else{const c=String(o.codigo||id);(porChunk[chunkOf(c)]=porChunk[chunkOf(c)]||{})[c]=o}}
   for(const [k,items] of Object.entries(porChunk))await db.doc('catalogo/'+k).set({items},{merge:true});
