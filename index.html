@@ -679,9 +679,9 @@ function vMateriales(){const q=norm(S.matQ);const ed=can('editar_mat');
 /* ---------- Embarcaciones ---------- */
 function vEmb(){const ed=can('editar_emb');const f=S.embF||'';
   const L=S.embarcaciones.filter(e=>!f||estProy(e)===f).slice().sort((a,b)=>a.nombre.localeCompare(b.nombre));
-  return `<div class="head"><h1>Embarcaciones · Proyectos</h1><select style="width:auto" data-b="embF" data-rr="1"><option value="">Todos los estados</option>${EST_PROY.map(x=>`<option ${f===x?'selected':''}>${x}</option>`).join('')}</select><div class="sp"></div>${ed?'<button class="btn" data-act="importEmb">⬆ Importar Excel</button><button class="btn a" data-act="embModal">+ Embarcación</button>':''}</div>
+  return `<div class="head"><h1>Embarcaciones · Proyectos</h1><select style="width:auto" data-b="embF" data-rr="1"><option value="">Todos los estados</option>${EST_PROY.map(x=>`<option ${f===x?'selected':''}>${x}</option>`).join('')}</select><div class="sp"></div>${ed?'<button class="btn" data-act="plantillaEmb">⬇ Plantilla</button><button class="btn p" data-act="importEmb">⬆ Cargar actividades y grafos (Excel)</button><button class="btn a" data-act="embModal">+ Embarcación</button>':''}</div>
   <p class="muted small" style="margin-top:-6px">Cada embarcación tiene sistemas (con su grafo), actividades (Pos.), contactos que reciben los correos y un estado de proyecto. Un proyecto <b>Cerrado</b> ya no recibe solicitudes ni reservas.</p>
-  ${L.length?L.map(e=>`<div class="card"><div class="row"><h2 style="margin:0">${esc(e.nombre)}</h2>${chipP(estProy(e))}<span class="muted small">${(e.sistemas||[]).length} sistema(s) · ${(e.contactos||[]).length} contacto(s)</span><div style="flex:1"></div>
+  ${L.length?L.map(e=>`<div class="card"><div class="row"><h2 style="margin:0">${esc(e.nombre)}</h2>${chipP(estProy(e))}<span class="muted small">${(e.sistemas||[]).length} sistema(s) · ${(e.sistemas||[]).reduce((a,x)=>a+(x.actividades||[]).length,0)} actividad(es) · ${(e.contactos||[]).length} contacto(s)${e.ultimaCarga?` · última carga ${esc(fdt(e.ultimaCarga.fecha))}`:''}</span><div style="flex:1"></div>
    ${ed?`<select style="width:auto" data-ch="embEstado" data-id="${esc(e.id)}">${EST_PROY.map(x=>`<option ${estProy(e)===x?'selected':''}>${x}</option>`).join('')}</select><button class="btn s" data-act="embModal" data-id="${esc(e.id)}">Editar</button>`:''}</div>
    <div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(220px,1fr);margin-top:8px"><div class="scroll"><table class="rs"><thead><tr><th>Sistema</th><th>Grafo</th><th>Actividades (Pos. — nombre)</th></tr></thead><tbody>${(e.sistemas||[]).map(s=>`<tr><td data-l="Sistema"><b>${esc(s.nombre)}</b></td><td data-l="Grafo" class="mono">${esc(s.grafo)}</td><td data-l="Actividades">${(s.actividades||[]).map(a=>`<div><span class="mono">${esc(a.pos)}</span> — ${esc(a.nombre)}</div>`).join('')||'—'}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">Sin sistemas</td></tr>'}</tbody></table></div>
    <div><div class="small" style="font-weight:600;color:var(--muted);margin-bottom:4px">CONTACTOS / CORREOS <span style="font-weight:400">(🔔 recibe alertas)</span></div>${(e.contactos||[]).map(c=>`<div class="small" style="padding:3px 0">${esAlerta(c)?'🔔 ':''}<b>${esc(c.cargo)}</b>${c.nombre?' — '+esc(c.nombre):''}<br><span class="mono">${esc(c.correo)}</span></div>`).join('')||'<span class="muted small">Sin contactos</span>'}</div></div></div>`).join(''):'<div class="card empty">No hay embarcaciones con este filtro.</div>'}`}
@@ -901,8 +901,9 @@ function mImpLista(M){const R=M.rows||[];const n=R.filter(r=>r.usar).length,nref
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="impListaOK" ${n?'':'disabled'}>Agregar ${n} material(es)</button></div>`}
 
 /* ============ Novedades de versión ============ */
-const APP_VERSION='1.8';
+const APP_VERSION='1.9';
 const CHANGELOG=[
+ {v:'1.9',f:'2026-11-19',t:'Carga diaria de actividades y grafos',items:['⬆ En Embarcaciones: <b>Cargar actividades y grafos (Excel)</b> con vista previa. Solo se agrega lo nuevo; lo existente se conserva y no se elimina nada.','⚠ Si un grafo o nombre de actividad cambió, usted decide si actualizarlo.']},
  {v:'1.8',f:'2026-11-19',t:'Estados SAP y pendientes de la contrata',items:['✅ El Excel devuelto por el script actualiza cada material como <b>Reservado</b> o <b>Bloqueado</b>.','🔓 En Bloqueos: marque <b>Solicitud de desbloqueo enviada</b> y, cuando el código esté desbloqueado, cargue su <b>reserva y posición</b> ahí mismo.','📋 Las contratas ven en <b>Pendientes</b> sus códigos bloqueados, sus materiales sin código y una alerta 🎉 cuando ya tienen reserva.']},
  {v:'1.7',f:'2026-11-19',t:'Buzón de mejoras y novedades',items:['💡 Nuevo <b>Buzón de mejoras</b>: proponga funciones, reporte errores y vote 👍 las ideas de otros usuarios.','📣 Esta ventana de <b>novedades</b> le avisará cada vez que la app tenga funciones nuevas.']},
  {v:'1.6',f:'2026-11-19',t:'Unidades, listas y correos',items:['📏 Más unidades de medida (PZA, KIT, M3, TON, BAR…) y el administrador puede agregar nuevas.','⬆ <b>Importar lista</b>: suba su Excel o pegue filas copiadas y la app busca cada material en el catálogo.','✉ Correos de la solicitud: Correo 1 contrata, Correo 2 responsables y Correo 3 diseño. La alerta va PARA diseño con CC a responsables.']},
@@ -971,10 +972,45 @@ function mAvisoRes(M){const C=correosSol(M.s);const h=M.s.header;const lineas=M.
   <label>CC · Responsables</label><div class="mono small" style="margin-bottom:6px;word-break:break-all">${n.cc.map(esc).join('; ')||'—'}</div>
   <label>Mensaje</label><textarea rows="8" readonly>${esc(n.asunto+'\n\n'+n.cuerpo)}</textarea>
   <div class="mfoot" style="justify-content:flex-start">${n.para.length?`<a class="btn a" href="${esc(mailtoDe(n))}" target="_blank" rel="noopener">✉ Abrir en mi correo</a>`:''}<button class="btn" data-act="copiar" data-txt="${esc(n.asunto+'\n\n'+n.cuerpo)}">Copiar mensaje</button><div style="flex:1"></div><button class="btn" data-act="closeM">Cerrar</button></div>`}
+
+/* ============ Carga diaria de actividades y grafos (sin reemplazar ni borrar) ============ */
+const posKey=p=>{const t=String(p??'').trim();return /^\d+$/.test(t)?String(parseInt(t,10)):t.toUpperCase()};
+function planEmb(rows){const base={};S.embarcaciones.forEach(e=>base[norm(e.nombre)]=e);const res={nuevasEmb:[],nuevosSis:[],nuevasAct:[],difGrafo:[],difNombre:[],iguales:0,omitidas:[]};
+  const work={};const get=k=>work[k]||(work[k]=clone(base[k]||null));let filas=0;
+  rows.forEach((r,ix)=>{const emb=String(cell(r.embarcacion||r.proyecto||r.nave||r.buque||r.remolcador||'')).trim().toUpperCase();
+    const sis=String(cell(r.sistema||'')).trim().toUpperCase(),g=String(cell(r.grafo||r.grafos||'')).trim();
+    const pos=String(cell(r.pos||r.posicion||r.actividad||r.operacion||r.op||'')).trim(),na=String(cell(r.nombredeactividad||r.descripcionactividad||r.nombreactividad||r.descripcion||r.textobreveoperacion||r.texto||'')).trim();
+    if(!emb&&!sis&&!g&&!pos)return;filas++;
+    if(!emb||(!sis&&!g)){res.omitidas.push(`Fila ${ix+2}: falta ${!emb?'embarcación':'sistema o grafo'}`);return}
+    const k=norm(emb);let e=get(k);if(!e){e=work[k]={id:newId('embarcaciones'),nombre:emb,estado:'Activo',contactos:[],sistemas:[]};res.nuevasEmb.push(emb)}
+    e.sistemas=e.sistemas||[];let si=sis?e.sistemas.find(x=>norm(x.nombre)===norm(sis)):e.sistemas.find(x=>String(x.grafo)===g);
+    if(!si){si={nombre:sis||('GRAFO '+g),grafo:g,actividades:[]};e.sistemas.push(si);res.nuevosSis.push(`${emb} / ${si.nombre}${g?' (grafo '+g+')':''}`)}
+    else if(g&&String(si.grafo||'')!==g){if(!si.grafo){si.grafo=g}else if(!res.difGrafo.some(x=>x.emb===emb&&x.sis===si.nombre))res.difGrafo.push({emb,sis:si.nombre,actual:si.grafo,nuevo:g})}
+    if(!pos){res.iguales++;return}
+    si.actividades=si.actividades||[];const a=si.actividades.find(x=>posKey(x.pos)===posKey(pos));
+    if(!a){si.actividades.push({pos,nombre:na});res.nuevasAct.push(`${emb} / ${si.nombre} / Pos ${pos}${na?' — '+na:''}`)}
+    else if(na&&norm(a.nombre)!==norm(na)){if(!a.nombre)a.nombre=na;else res.difNombre.push({emb,sis:si.nombre,pos:a.pos,actual:a.nombre,nuevo:na})}
+    else res.iguales++});
+  return {work,res,filas}}
+function aplicarPlanEmb(P,updG,updN){const out=[];for(const [k,e] of Object.entries(P.work)){if(!e)continue;
+    if(updG)P.res.difGrafo.filter(d=>norm(d.emb)===k).forEach(d=>{const si=e.sistemas.find(x=>x.nombre===d.sis);if(si)si.grafo=d.nuevo});
+    if(updN)P.res.difNombre.filter(d=>norm(d.emb)===k).forEach(d=>{const si=e.sistemas.find(x=>x.nombre===d.sis);const a=si&&si.actividades.find(x=>posKey(x.pos)===posKey(d.pos));if(a)a.nombre=d.nuevo});
+    const prev=S.embarcaciones.find(x=>x.id===e.id);const a=JSON.stringify((prev||{}).sistemas||null),b=JSON.stringify(e.sistemas);if(!prev||a!==b)out.push(e)}return out}
+function mImpEmb(M){const r=M.plan.res;const lst=(t,l,c)=>l.length?`<details ${l.length<=8?'open':''} style="margin-top:8px"><summary><b>${t} (${l.length})</b></summary><div class="small" style="max-height:160px;overflow:auto;padding:4px 0 0 14px;color:${c||'inherit'}">${l.map(x=>esc(x)).join('<br>')}</div></details>`:'';
+  const cambios=r.nuevasEmb.length+r.nuevosSis.length+r.nuevasAct.length+(M.updGrafo?r.difGrafo.length:0)+(M.updNombre?r.difNombre.length:0);
+  return `<h2>Carga de actividades y grafos</h2><p class="small muted" style="margin-top:-8px">Archivo <b>${esc(M.archivo)}</b> · ${M.plan.filas} fila(s) leídas. Solo se <b>agrega</b> lo nuevo; lo que ya existe se conserva y <b>no se elimina nada</b>.</p>
+  <div class="kpis" style="margin:10px 0"><div class="kpi" style="--c:var(--ok);cursor:default"><b>${r.nuevasAct.length}</b><span>Actividades nuevas</span></div><div class="kpi" style="--c:var(--info);cursor:default"><b>${r.nuevosSis.length}</b><span>Sistemas nuevos</span></div><div class="kpi" style="--c:var(--navy);cursor:default"><b>${r.nuevasEmb.length}</b><span>Embarcaciones nuevas</span></div><div class="kpi" style="--c:#8a99a8;cursor:default"><b>${r.iguales}</b><span>Ya existían (sin cambios)</span></div></div>
+  ${lst('Embarcaciones nuevas',r.nuevasEmb)}${lst('Sistemas nuevos',r.nuevosSis)}${lst('Actividades nuevas',r.nuevasAct)}
+  ${r.difGrafo.length?`<div class="warn" style="margin-top:10px"><b>${r.difGrafo.length} sistema(s) con grafo distinto</b> al registrado:<div class="small" style="max-height:120px;overflow:auto">${r.difGrafo.map(d=>`${esc(d.emb)} / ${esc(d.sis)}: actual <b>${esc(d.actual)}</b> → archivo <b>${esc(d.nuevo)}</b>`).join('<br>')}</div>
+   <label style="display:flex;gap:6px;align-items:center;font-weight:500;margin:6px 0 0"><input type="checkbox" style="width:auto" data-b="modal.updGrafo" ${M.updGrafo?'checked':''}> Actualizar el grafo con el del archivo (si no, se conserva el actual)</label></div>`:''}
+  ${r.difNombre.length?`<div class="warn" style="margin-top:10px"><b>${r.difNombre.length} actividad(es) con nombre distinto</b>:<div class="small" style="max-height:120px;overflow:auto">${r.difNombre.map(d=>`${esc(d.emb)} / ${esc(d.sis)} / Pos ${esc(d.pos)}: “${esc(d.actual)}” → “${esc(d.nuevo)}”`).join('<br>')}</div>
+   <label style="display:flex;gap:6px;align-items:center;font-weight:500;margin:6px 0 0"><input type="checkbox" style="width:auto" data-b="modal.updNombre" ${M.updNombre?'checked':''}> Actualizar el nombre con el del archivo (si no, se conserva el actual)</label></div>`:''}
+  ${lst('Filas omitidas',r.omitidas,'var(--bad)')}
+  <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="impEmbOK" ${cambios?'':'disabled'}>${cambios?`Aplicar ${cambios} cambio(s)`:'No hay nada nuevo que cargar'}</button></div>`}
 /* ============ Modales ============ */
 function modalHTML(){const M=S.modal;let body='';
   if(M.t==='calc')body=mCalc(M);else if(M.t==='ref')body=mRef(M);else if(M.t==='mat')body=mMat(M);else if(M.t==='emb')body=mEmb(M);
-  else if(M.t==='reserva')body=mReserva(M);else if(M.t==='obs')body=mObs(M);else if(M.t==='emp')body=mEmp(M);else if(M.t==='user')body=mUser(M);else if(M.t==='plantSave')body=mPlantSave(M);else if(M.t==='plantEdit')body=mPlantEdit(M);else if(M.t==='nuevaDesde')body=mNuevaDesde(M);else if(M.t==='alerta')body=mAlerta(M);else if(M.t==='impLista')body=mImpLista(M);else if(M.t==='novedades')body=mNovedades(M);else if(M.t==='mejResp')body=mMejResp(M);else if(M.t==='avisoRes')body=mAvisoRes(M);else if(M.t==='tpl')body=mTpl(M);
+  else if(M.t==='reserva')body=mReserva(M);else if(M.t==='obs')body=mObs(M);else if(M.t==='emp')body=mEmp(M);else if(M.t==='user')body=mUser(M);else if(M.t==='plantSave')body=mPlantSave(M);else if(M.t==='plantEdit')body=mPlantEdit(M);else if(M.t==='nuevaDesde')body=mNuevaDesde(M);else if(M.t==='alerta')body=mAlerta(M);else if(M.t==='impLista')body=mImpLista(M);else if(M.t==='novedades')body=mNovedades(M);else if(M.t==='mejResp')body=mMejResp(M);else if(M.t==='avisoRes')body=mAvisoRes(M);else if(M.t==='impEmb')body=mImpEmb(M);else if(M.t==='tpl')body=mTpl(M);
   else if(M.t==='foto')body=`<h2>Foto referencial</h2>${M.src?`<img src="${esc(M.src)}" style="max-width:100%;border-radius:8px">`:'Cargando…'}<div class="mfoot"><button class="btn" data-act="closeM">Cerrar</button></div>`;
   else if(M.t==='asignar')body=mAsignar(M);else if(M.t==='confirm')body=`<h2>${esc(M.title)}</h2><p>${esc(M.msg)}</p><div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn ${M.danger?'d':'p'}" data-act="confirmOK">${esc(M.ok||'Aceptar')}</button></div>`;
   else if(M.t==='info')body=`<h2>${esc(M.title)}</h2><div>${M.html}</div><div class="mfoot"><button class="btn p" data-act="closeM">Entendido</button></div>`;
@@ -1235,13 +1271,19 @@ const ACT={
     const b={nombre:v.nombre.trim().toUpperCase(),estado:v.estado||'Activo',contactos:(v.contactos||[]).filter(c=>String(c.correo||'').trim()).map(c=>({cargo:c.cargo||'',nombre:String(c.nombre||'').trim(),correo:String(c.correo).trim(),alerta:c.alerta===undefined?c.cargo===CARGO_ALERTA:!!c.alerta})),sistemas:(v.sistemas||[]).filter(s=>s.nombre.trim()).map(s=>({nombre:s.nombre.trim().toUpperCase(),grafo:String(s.grafo||'').trim(),actividades:(s.actividades||[]).filter(a=>String(a.pos).trim()||a.nombre.trim()).map(a=>({pos:String(a.pos).trim(),nombre:a.nombre.trim()}))}))};
     S.modal=null;render();await setDoc('embarcaciones/'+id,b);toast('Embarcación guardada')},
   embDel(){const v=S.modal.v;S.modal={t:'confirm',title:'Eliminar embarcación',msg:`¿Eliminar ${v.nombre} con todos sus sistemas?`,ok:'Eliminar',danger:true,fn:()=>delDoc('embarcaciones/'+v.id)};render()},
-  async importEmb(){const f=await pickFile('.xlsx,.xls,.csv');if(!f)return;let rows;try{rows=await readXL(f)}catch(e){toast(e.message,'bad');return}
-    const map={};S.embarcaciones.forEach(e=>map[norm(e.nombre)]=clone(e));let n=0;
-    rows.forEach(r=>{const p=String(cell(r.proyecto||r.embarcacion)).toUpperCase(),s=String(cell(r.sistema)).toUpperCase();if(!p||!s)return;
-      const e=map[norm(p)]||(map[norm(p)]={id:newId('embarcaciones'),nombre:p,sistemas:[]});let si=e.sistemas.find(x=>norm(x.nombre)===norm(s));if(!si){si={nombre:s,grafo:'',actividades:[]};e.sistemas.push(si)}
-      const g=String(cell(r.grafo));if(g)si.grafo=g;const pos=String(cell(r.pos||r.posicion||r.actividad)),na=String(cell(r.nombredeactividad||r.descripcionactividad||''));
-      if(pos&&!si.actividades.some(a=>String(a.pos)===pos)){si.actividades.push({pos,nombre:na});n++}});
-    for(const e of Object.values(map)){const b=clone(e);delete b.id;await setDoc('embarcaciones/'+e.id,b).catch(()=>{})}toast(`Importado: ${Object.keys(map).length} embarcación(es), ${n} actividad(es) nuevas`)},
+  async importEmb(){const f=await pickFile('.xlsx,.xls,.csv');if(!f)return;let rows;try{rows=await readXL(f)}catch(e){toast('No se pudo leer el archivo: '+e.message,'bad');return}
+    const plan=planEmb(rows);if(!plan.filas){toast('No se reconocieron columnas Embarcación / Sistema / Grafo / Pos. / Nombre de actividad.','bad');return}
+    S.modal={t:'impEmb',wide:true,plan,archivo:f.name,updGrafo:false,updNombre:false};render()},
+  async impEmbOK(){const M=S.modal,P=M.plan;const out=aplicarPlanEmb(P,M.updGrafo,M.updNombre);S.modal={t:'info',title:'Aplicando carga…',html:'Guardando cambios…'};render();
+    let n=0;for(const e of out){const b=clone(e);delete b.id;b.ultimaCarga={fecha:nowISO(),por:S.cuenta,archivo:M.archivo};try{await setDoc('embarcaciones/'+e.id,b);n++}catch(x){}}
+    const r=P.res;S.modal={t:'info',title:'Carga de actividades completada',html:`<div class="okbox">✔ ${n} embarcación(es) actualizada(s).</div><ul style="line-height:1.7">
+      <li><b>${r.nuevasEmb.length}</b> embarcación(es) nueva(s)</li><li><b>${r.nuevosSis.length}</b> sistema(s) nuevo(s)</li><li><b>${r.nuevasAct.length}</b> actividad(es) nueva(s)</li>
+      <li><b>${r.iguales}</b> fila(s) ya existían y se conservaron sin cambios</li>
+      ${r.difGrafo.length?`<li>${r.difGrafo.length} grafo(s) distinto(s): ${M.updGrafo?'<b>actualizados</b>':'<b>se conservó el existente</b>'}</li>`:''}
+      ${r.difNombre.length?`<li>${r.difNombre.length} nombre(s) de actividad distinto(s): ${M.updNombre?'<b>actualizados</b>':'<b>se conservó el existente</b>'}</li>`:''}
+      <li>No se eliminó ninguna embarcación, sistema ni actividad.</li></ul>`};render()},
+  async plantillaEmb(){if(!window.XLSX)return;const ws=XLSX.utils.aoa_to_sheet([['Embarcación','Sistema','Grafo','Pos.','Nombre de actividad'],['RM HERCULES 1','VALVULAS','5018582','3','Desm/mant/mont valvulas de achique'],['RM HERCULES 1','TUBERIAS','5018583','2','Camb tub agua dulce lavacara en baño']]);ws['!cols']=[{wch:18},{wch:16},{wch:10},{wch:6},{wch:44}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Actividades');await saveFile('plantilla_actividades_grafos.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}))},
   async alertaEnviada(el){const n=S.notifs.find(x=>x.id===el.dataset.id)||(S.modal&&S.modal.n);const b=clone(n);delete b.id;b.estado='enviada';b.enviada=nowISO();b.enviadaPor=S.cuenta;S.modal=null;render();await setDoc('notificaciones/'+el.dataset.id,b);toast('Alerta marcada como enviada')},
   verAlerta(el){const n=S.notifs.find(x=>x.id===el.dataset.id);if(n){S.modal={t:'alerta',n:clone(n)};render()}},
   async generarAlerta(){await crearAlerta(S.draft)},
