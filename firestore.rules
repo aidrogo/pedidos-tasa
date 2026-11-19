@@ -39,7 +39,7 @@ service cloud.firestore {
       allow read: if active() || (signed() && uname() == u);
       allow create: if isAdmin() || (signed() && uname() == u && sinIniciar() && request.resource.data.rol == 'admin');
       allow update: if isAdmin() || (active() && uname() == u &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['correo1','correo2','correo3','ultimoIngreso','actualizado']));
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['correo1','correo2','correo3','ultimoIngreso','actualizado','versionVista']));
       allow delete: if isAdmin();
     }
     // Contraseñas visibles solo para administradores
@@ -81,6 +81,13 @@ service cloud.firestore {
       allow read, create: if active();
       allow update: if perm('validar') || (active() && resource.data.por == uname());
       allow delete: if perm('eliminar');
+    }
+    // Buzón de mejoras: todos leen y proponen; cualquiera puede votar; el administrador gestiona
+    match /mejoras/{id} {
+      allow read: if active();
+      allow create: if active() && request.resource.data.por == uname();
+      allow update: if isAdmin() || (active() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votos']));
+      allow delete: if isAdmin() || (active() && resource.data.por == uname() && resource.data.estado == 'Recibida');
     }
     match /fotos/{id} {
       allow read, create: if active();

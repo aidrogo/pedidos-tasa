@@ -320,7 +320,7 @@ function parseObs(obs){const s=String(obs||'').toLowerCase().replace(',','.');
 
 /* ============ Estado ============ */
 const S={boot:'loading',demo:false,db:null,user:null,dl:null,uid:null,owner:false,role:null,realRole:null,
-  materiales:[],embarcaciones:[],solicitudes:[],plantSol:[],unidades:null,diseno:null,notifs:[],empresas:[],cuentas:[],creds:{},claves:[],sesiones:[],rolesCfg:null,periodos:null,cargos:null,plantillas:null,
+  materiales:[],embarcaciones:[],solicitudes:[],plantSol:[],unidades:null,diseno:null,mejoras:[],notifs:[],empresas:[],cuentas:[],creds:{},claves:[],sesiones:[],rolesCfg:null,periodos:null,cargos:null,plantillas:null,
   sesion:undefined,cuenta:null,per:'',
   view:'inicio',sel:null,draft:null,dirty:false,modal:null,filt:{q:'',estado:'',emb:'',empresa:''},matTab:'cat',matQ:'',gTab:'cuenta',loaded:{},stale:false};
 const rolesList=()=>(S.rolesCfg&&S.rolesCfg.length)?S.rolesCfg:DEF_ROLES;
@@ -378,7 +378,7 @@ async function delMany(paths,prog){let n=0;for(const p of paths){for(let a=0;a<5
 function subscribeDemo(){
   const t=setTimeout(()=>{S.stale=true;render()},10000);
   const col=(name,key,map)=>S.db.collection(name).onSnapshot(sn=>{const l=sn.docs.map(d=>({id:d.id,...clone(d.data())}));if(map)map(l);else S[key]=l;if(!sn.metadata.fromCache){S.loaded[key]=1;if(Object.keys(S.loaded).length>=6){clearTimeout(t);S.stale=false}}afterData();},e=>{clearTimeout(t);S.stale=false;console.warn(name,e);S.loaded[key]=1;afterData()});
-  col('materiales','materiales');col('embarcaciones','embarcaciones');col('solicitudes','solicitudes');col('empresas','empresas');col('cuentas','cuentas');col('plantillasSol','plantSol');col('notificaciones','notifs');
+  col('materiales','materiales');col('embarcaciones','embarcaciones');col('solicitudes','solicitudes');col('empresas','empresas');col('cuentas','cuentas');col('plantillasSol','plantSol');col('mejoras','mejoras');col('notificaciones','notifs');
   col('credenciales','creds',l=>{const m={};l.forEach(c=>m[c.id]=c);S.creds=m});
   if(S.owner){col('claves','claves');col('sesiones','sesiones')}
   const cfg=(id,key)=>S.db.doc('config/'+id).onSnapshot(sn=>{S[key]=sn.exists?clone(sn.data().list):null;afterData()},()=>{});
@@ -396,6 +396,7 @@ function afterDataDemo(){
     if(u)S.cuenta=u}
   const c=miCuenta();S.realRole=c?c.rol:null;if(!S.viewAs)S.role=S.realRole;
   if(S.draft&&!S.dirty&&!S.isNew){const s=S.solicitudes.find(x=>x.id===S.sel);if(s)S.draft=clone(s)}
+  checkNovedades();
   schedule()}
 
 /* ============ Render ============ */
@@ -415,11 +416,12 @@ const IC={
  gestion:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M17 4a4 4 0 010 8M22 21c0-3-2-5-4-6"/></svg>',
  plantillas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>',
  bloqueos:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>',
+ mejoras:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z"/></svg>',
  formulas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 8h3M9.5 6.5v3M14 8h3M8 15h3M14 14l3 3M17 14l-3 3"/></svg>'};
 function navItems(){const it=[['inicio','Inicio'],['solicitudes','Solicitudes']];
   if(can('crear'))it.push(['nueva','Nueva'],['plantillas','Plantillas']);it.push(['materiales','Materiales']);
   if(can('editar_emb')||can('ver_todas'))it.push(['embarcaciones','Embarcaciones']);
-  if(can('reserva')||can('validar'))it.push(['bloqueos','Bloqueos']);if(can('formulas'))it.push(['formulas','Fórmulas']);it.push(['gestion','Gestión']);return it}
+  if(can('reserva')||can('validar'))it.push(['bloqueos','Bloqueos']);if(can('formulas'))it.push(['formulas','Fórmulas']);it.push(['mejoras','Mejoras'],['gestion','Gestión']);return it}
 function render(){
   const a=$('#app');
   if(S.fb?(S.boot!=='ok'||(S.cuenta&&!S.loaded.cuentas)):(S.boot!=='ok'||!S.loaded.cuentas||!S.loaded.creds||S.sesion===undefined)){a.innerHTML='<div class="center card">Conectando…</div>';return}
@@ -438,7 +440,7 @@ function render(){
    ${S.cuenta==='__owner__'?'<div class="banner">Acceso de recuperación de la propietaria. Cree o restablezca su usuario en Gestión → Usuarios.</div>':''}
    <div class="layout">${nav('side')}<main>${S.view!=='detalle'?botVista(S.view):''}${view()}</main></div>${nav('bottom')}${S.modal?modalHTML():''}`;
 }
-function view(){switch(S.view){case 'inicio':return vInicio();case 'solicitudes':return vLista();case 'detalle':return vDetalle();case 'materiales':return vMateriales();case 'embarcaciones':return vEmb();case 'gestion':return vGestion();case 'plantillas':return vPlantillas();case 'bloqueos':return vBloqueos();case 'formulas':return vFormulas();default:return vInicio()}}
+function view(){switch(S.view){case 'inicio':return vInicio();case 'solicitudes':return vLista();case 'detalle':return vDetalle();case 'materiales':return vMateriales();case 'embarcaciones':return vEmb();case 'gestion':return vGestion();case 'plantillas':return vPlantillas();case 'bloqueos':return vBloqueos();case 'mejoras':return vMejoras();case 'formulas':return vFormulas();default:return vInicio()}}
 
 const ROBOT=`<svg class="rb-head" viewBox="0 0 140 126" aria-hidden="true">
  <line x1="70" y1="25" x2="70" y2="10" stroke="#cfe3f4" stroke-width="4" stroke-linecap="round"/><circle class="rb-ant" cx="70" cy="9" r="7" fill="#8fbf2e" stroke="#eef6fc" stroke-width="2.5"/>
@@ -791,6 +793,7 @@ function botVista(v){const c=miCuenta()||{},nom=esc(String(c.nombre||'').split('
       botHTML(res?`¡Hola${nom?', '+nom:''}! Tienes <b>${res}</b> pedido(s) con reserva lista para copiar.`:`¡Hola${nom?', '+nom:''}! ¿Armamos un pedido? Toca <b>Nueva</b> o parte de una plantilla.`,{mood:'happy'})}
   if(v==='solicitudes'){if(enProc)return botHTML(can('validar')?`Estoy procesando <b>${enProc}</b> solicitud(es) activas: revisión, carga y reserva. Abre cualquiera para ver su avance.`:`<b>Tu pedido está siendo atendido.</b> Tienes ${enProc} solicitud(es) en proceso; te muestro aquí cuando tengan reserva y posición.`,{working:true,title:'Pedidos en atención'});
     return botHTML(res?`Tienes <b>${res}</b> pedido(s) con reserva. Ábrelos para copiar la reserva / pos.`:`No hay pedidos en proceso en este momento. ${can('crear')?'Cuando envíes uno, yo lo sigo por ti.':''}`,{mood:'happy',title:'Pedidos en atención'})}
+  if(v==='mejoras')return botHTML(`¿Qué le gustaría que la app haga por usted? Cuénteme su idea y el equipo de Diseño la evaluará. Las propuestas con más 👍 se priorizan.`,{mood:'happy',title:'Buzón de mejoras'});
   if(v==='bloqueos'){const L=bloqueosTodos(),sb=L.filter(x=>sigueBloq(x.it)).length;return botHTML(sb?`Estoy vigilando <b>${sb}</b> código(s) bloqueado(s) en SAP. Cuando se desbloqueen, márquelos como <b>Desbloqueado</b> y yo preparo el Excel de carga posterior.`:(L.length?`Todo desbloqueado: <b>${L.length}</b> ítem(s) esperan la carga posterior.`:'No hay códigos bloqueados. ¡Todo fluye! 🎉'),{mood:sb?'worry':'happy',working:!!sb,title:'Bloqueos SAP'})}
   if(v==='materiales')return botHTML('Busca rápido con comodines: <b>pl*12*</b>, <b>tub* 1/2*</b>. Si no encuentras un material, regístralo como referencial y el planificador le asigna su código.',{title:'Catálogo'});
   if(v==='plantillas')return botHTML('Guarda tus pedidos frecuentes como plantilla y yo los preparo en un clic: solo ajustas las cantidades.',{mood:'happy',title:'Plantillas'});
@@ -886,10 +889,65 @@ function mImpLista(M){const R=M.rows||[];const n=R.filter(r=>r.usar).length,nref
    <td data-l="Cant." class="mono">${esc(r.cantidad)}</td><td data-l="Avisos" class="small" style="color:var(--warn)">${esc(r.avisos.join(' · '))}</td></tr>`).join('')}</tbody></table></div>
    <div class="small" style="margin-top:8px"><b>${n}</b> material(es) a agregar${nref?` · <b>${nref}</b> como referencial(es)`:''}.</div>`:''}
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="impListaOK" ${n?'':'disabled'}>Agregar ${n} material(es)</button></div>`}
+
+/* ============ Novedades de versión ============ */
+const APP_VERSION='1.7';
+const CHANGELOG=[
+ {v:'1.7',f:'2026-11-19',t:'Buzón de mejoras y novedades',items:['💡 Nuevo <b>Buzón de mejoras</b>: proponga funciones, reporte errores y vote 👍 las ideas de otros usuarios.','📣 Esta ventana de <b>novedades</b> le avisará cada vez que la app tenga funciones nuevas.']},
+ {v:'1.6',f:'2026-11-19',t:'Unidades, listas y correos',items:['📏 Más unidades de medida (PZA, KIT, M3, TON, BAR…) y el administrador puede agregar nuevas.','⬆ <b>Importar lista</b>: suba su Excel o pegue filas copiadas y la app busca cada material en el catálogo.','✉ Correos de la solicitud: Correo 1 contrata, Correo 2 responsables y Correo 3 diseño. La alerta va PARA diseño con CC a responsables.']},
+ {v:'1.5',f:'2026-11-18',t:'Seguimiento de bloqueos SAP',items:['🔒 Seguimiento de códigos bloqueados en SAP hasta su desbloqueo y Excel de carga posterior.','📱 Diseño adaptado a celulares e indicador de conexión 🟢.']},
+ {v:'1.4',f:'2026-11-18',t:'Asistente y nueva imagen',items:['🤖 Asistente robot que le muestra en qué etapa está cada pedido.','🎨 Imagen del Astillero TASA en toda la app.']},
+ {v:'1.3',f:'2026-11-18',t:'Autoguardado y alertas',items:['💾 Los borradores se guardan solos.','📋 Copie la reserva / pos con un clic.','🔔 Alerta por correo al registrar una solicitud.']},
+ {v:'1.2',f:'2026-11-18',t:'Plantillas y búsqueda rápida',items:['☆ Plantillas para pedidos que se repiten.','🔎 Búsqueda con comodines: pl*12*, tub* 1/2*.','📝 Borradores mientras se define la actividad.']},
+ {v:'1.0',f:'2026-11-18',t:'Lanzamiento',items:['Solicitudes por embarcación, sistema y actividad; catálogo; cálculo por medidas; Excel de carga y reservas.']}];
+const verNum=v=>String(v||'0').split('.').map(n=>parseInt(n)||0).reduce((a,n,i)=>a+n/Math.pow(1000,i),0);
+function versionVista(){let v='';try{v=localStorage.getItem('pm_ver_'+S.cuenta)||''}catch(e){}
+  const c=S.cuentas.find(x=>x.id===S.cuenta);if(c&&c.versionVista&&verNum(c.versionVista)>verNum(v))v=c.versionVista;
+  if(S.sesion&&S.sesion.versionVista&&verNum(S.sesion.versionVista)>verNum(v))v=S.sesion.versionVista;return v}
+async function marcarVista(){const v=APP_VERSION;try{localStorage.setItem('pm_ver_'+S.cuenta,v)}catch(e){}
+  try{if(S.fb)await FB.raw.doc('cuentas/'+S.cuenta).update({versionVista:v});else if(S.uid)await S.db.doc('sesiones/'+S.uid).update({versionVista:v})}catch(e){}}
+function checkNovedades(){if(S.novChecked||!S.cuenta||S.cuenta==='__owner__'||!S.loaded.cuentas||S.modal||S.view==='detalle')return;S.novChecked=true;
+  const vis=versionVista();if(verNum(vis)>=verNum(APP_VERSION))return;
+  const nuevas=CHANGELOG.filter(c=>verNum(c.v)>verNum(vis)).slice(0,vis?6:1);S.modal={t:'novedades',L:nuevas};schedule()}
+function mNovedades(M){const L=M.todas?CHANGELOG:M.L;
+  return `<div class="row" style="gap:12px;align-items:center;margin-bottom:6px"><div style="width:64px;flex-shrink:0">${robotMini('happy')}</div><div><h2 style="margin:0">¡Novedades en la app! 🎉</h2><div class="small muted">Versión ${esc(APP_VERSION)}</div></div></div>
+  <div style="max-height:52vh;overflow:auto">${L.map(c=>`<div class="card" style="margin:10px 0 0;border-left:4px solid var(--accent)"><div class="row"><b>${esc(c.t)}</b><div style="flex:1"></div><span class="chip">v${esc(c.v)} · ${esc(c.f.split('-').reverse().join('/'))}</span></div><ul style="margin:8px 0 0;padding-left:18px;line-height:1.6">${c.items.map(x=>`<li>${x}</li>`).join('')}</ul></div>`).join('')}</div>
+  <div class="mfoot">${M.todas?'':'<button class="btn" data-act="novTodas">Ver historial completo</button>'}<button class="btn" data-act="novMejora">💡 Proponer una mejora</button><button class="btn p" data-act="novOK">¡Entendido!</button></div>`}
+
+/* ============ Buzón de mejoras ============ */
+const TIPOS_MEJ=['Nueva función','Mejora','Error / falla','Otro'];
+const EST_MEJ=['Recibida','En evaluación','Planificada','Implementada','Descartada'];
+const chipMej=e=>{const c={'Recibida':'e-Enviada','En evaluación':'e-Exportada','Planificada':'e-Reservada','Implementada':'e-Validada','Descartada':'e-Anulada'}[e]||'';return `<span class="chip ${c}">${esc(e)}</span>`};
+function vMejoras(){const adm=can('usuarios');const F=S.mejF||{q:'',est:'',mias:false,orden:'votos'};S.mejF=F;const N=S.mejN||(S.mejN={titulo:'',tipo:'Nueva función',importancia:'Media',descripcion:'',foto:''});
+  let L=S.mejoras.slice();if(F.mias)L=L.filter(m=>m.por===S.cuenta);if(F.est)L=L.filter(m=>m.estado===F.est);if(F.q){const f=matcher(F.q);L=L.filter(m=>f(low(m.titulo+' '+m.descripcion)))}
+  L.sort((a,b)=>F.orden==='fecha'?String(b.fecha).localeCompare(String(a.fecha)):((b.votos||[]).length-(a.votos||[]).length)||String(b.fecha).localeCompare(String(a.fecha)));
+  const cnt=e=>S.mejoras.filter(m=>m.estado===e).length;
+  return `<div class="head"><h1>Buzón de mejoras</h1><span class="muted">${S.mejoras.length} propuesta(s)</span><div class="sp"></div><button class="btn" data-act="novAbrir">📣 Novedades v${esc(APP_VERSION)}</button>${adm?'<button class="btn" data-act="mejExport">⬇ Exportar</button>':''}</div>
+  <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);align-items:start">
+  <div class="card"><h2>💡 Nueva propuesta</h2><div class="grid">
+   <div><label>Título *</label><input data-b="mejN.titulo" value="${esc(N.titulo)}" placeholder="Ej. Recibir aviso cuando mi reserva esté lista" maxlength="120"></div>
+   <div class="grid g2"><div><label>Tipo</label><select data-b="mejN.tipo">${TIPOS_MEJ.map(t=>`<option ${N.tipo===t?'selected':''}>${t}</option>`).join('')}</select></div><div><label>Importancia para usted</label><select data-b="mejN.importancia">${['Baja','Media','Alta'].map(t=>`<option ${N.importancia===t?'selected':''}>${t}</option>`).join('')}</select></div></div>
+   <div><label>Descripción *</label><textarea rows="5" data-b="mejN.descripcion" placeholder="¿Qué necesita? ¿En qué parte de la app? ¿Cómo le ayudaría en su trabajo?">${esc(N.descripcion)}</textarea></div>
+   <div><label>Captura o imagen (opcional)</label><input type="file" accept="image/*" data-ch="mejFoto">${N.foto?`<img class="thumb" style="margin-top:6px" src="${esc(N.foto)}">`:''}</div>
+   <button class="btn a" data-act="mejEnviar">Enviar propuesta</button></div>
+   <div class="small muted" style="margin-top:10px">Todas las propuestas son visibles para los usuarios de la app, que pueden apoyarlas con 👍. El equipo de Diseño las revisa y responde aquí.</div></div>
+  <div><div class="card"><div class="row"><input style="flex:1;min-width:160px" data-b="mejF.q" data-rr="1" value="${esc(F.q)}" placeholder="Buscar…"><select style="width:auto" data-b="mejF.est" data-rr="1"><option value="">Todos los estados</option>${EST_MEJ.map(e=>`<option ${F.est===e?'selected':''}>${e} (${cnt(e)})</option>`.replace(`<option ${F.est===e?'selected':''}>${e} (${cnt(e)})</option>`,`<option value="${e}" ${F.est===e?'selected':''}>${e} (${cnt(e)})</option>`)).join('')}</select>
+    <select style="width:auto" data-b="mejF.orden" data-rr="1"><option value="votos" ${F.orden==='votos'?'selected':''}>Más apoyadas</option><option value="fecha" ${F.orden==='fecha'?'selected':''}>Más recientes</option></select>
+    <label style="display:flex;gap:5px;align-items:center;margin:0;font-weight:500"><input type="checkbox" style="width:auto" data-b="mejF.mias" ${F.mias?'checked':''}> Mías</label></div></div>
+  ${L.length?L.map(m=>{const v=(m.votos||[]),yo=v.includes(S.cuenta),e=empBy((S.cuentas.find(c=>c.id===m.por)||{}).empresaId||m.empresaId),mine=m.por===S.cuenta;
+   return `<div class="card"><div class="row" style="align-items:flex-start;flex-wrap:nowrap"><button class="btn ${yo?'p':''}" data-act="mejVoto" data-id="${esc(m.id)}" style="flex-direction:column;gap:0;min-width:56px;padding:6px 8px" title="${yo?'Quitar mi apoyo':'Apoyar esta propuesta'}">👍<b>${v.length}</b></button>
+    <div style="flex:1;min-width:0"><div class="row"><b style="font-size:15px">${esc(m.titulo)}</b>${chipMej(m.estado||'Recibida')}<span class="chip">${esc(m.tipo)}</span>${m.importancia==='Alta'?'<span class="chip e-Observada">Alta</span>':''}</div>
+    <div class="small muted" style="margin:3px 0 6px">${esc(nameOf(m.por))}${e?' · '+esc(e.nombre):''} · ${esc(fdt(m.fecha))}</div>
+    <div style="white-space:pre-wrap;font-size:13.5px">${esc(m.descripcion)}</div>${m.fotoId?`<button class="btn s" style="margin-top:6px" data-act="verFoto" data-id="${esc(m.fotoId)}">📷 Ver imagen</button>`:''}
+    ${m.respuesta?`<div class="okbox" style="margin-top:8px">💬 <b>Respuesta de Diseño:</b> ${esc(m.respuesta)}<div class="small muted">${esc(fdt(m.respondido))}</div></div>`:''}
+    ${adm?`<div class="row" style="margin-top:8px;border-top:1px dashed var(--line);padding-top:8px"><select style="width:auto" data-ch="mejEstado" data-id="${esc(m.id)}">${EST_MEJ.map(x=>`<option ${(m.estado||'Recibida')===x?'selected':''}>${x}</option>`).join('')}</select><button class="btn s" data-act="mejResp" data-id="${esc(m.id)}">💬 Responder</button><button class="btn s d" data-act="mejDel" data-id="${esc(m.id)}">Eliminar</button></div>`:mine&&(m.estado||'Recibida')==='Recibida'?`<div style="margin-top:6px"><button class="btn s d" data-act="mejDel" data-id="${esc(m.id)}">Retirar mi propuesta</button></div>`:''}
+    </div></div></div>`}).join(''):'<div class="card empty">Aún no hay propuestas con estos filtros. ¡Sea el primero en sugerir una mejora!</div>'}</div></div>`}
+function mMejResp(M){return `<h2>Responder propuesta</h2><p class="small"><b>${esc(M.m.titulo)}</b></p><textarea rows="5" data-b="modal.txt" placeholder="Ej. ¡Gracias! Lo incluiremos en la próxima versión.">${esc(M.txt)}</textarea>
+  <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="mejRespOK">Guardar respuesta</button></div>`}
 /* ============ Modales ============ */
 function modalHTML(){const M=S.modal;let body='';
   if(M.t==='calc')body=mCalc(M);else if(M.t==='ref')body=mRef(M);else if(M.t==='mat')body=mMat(M);else if(M.t==='emb')body=mEmb(M);
-  else if(M.t==='reserva')body=mReserva(M);else if(M.t==='obs')body=mObs(M);else if(M.t==='emp')body=mEmp(M);else if(M.t==='user')body=mUser(M);else if(M.t==='plantSave')body=mPlantSave(M);else if(M.t==='plantEdit')body=mPlantEdit(M);else if(M.t==='nuevaDesde')body=mNuevaDesde(M);else if(M.t==='alerta')body=mAlerta(M);else if(M.t==='impLista')body=mImpLista(M);else if(M.t==='tpl')body=mTpl(M);
+  else if(M.t==='reserva')body=mReserva(M);else if(M.t==='obs')body=mObs(M);else if(M.t==='emp')body=mEmp(M);else if(M.t==='user')body=mUser(M);else if(M.t==='plantSave')body=mPlantSave(M);else if(M.t==='plantEdit')body=mPlantEdit(M);else if(M.t==='nuevaDesde')body=mNuevaDesde(M);else if(M.t==='alerta')body=mAlerta(M);else if(M.t==='impLista')body=mImpLista(M);else if(M.t==='novedades')body=mNovedades(M);else if(M.t==='mejResp')body=mMejResp(M);else if(M.t==='tpl')body=mTpl(M);
   else if(M.t==='foto')body=`<h2>Foto referencial</h2>${M.src?`<img src="${esc(M.src)}" style="max-width:100%;border-radius:8px">`:'Cargando…'}<div class="mfoot"><button class="btn" data-act="closeM">Cerrar</button></div>`;
   else if(M.t==='asignar')body=mAsignar(M);else if(M.t==='confirm')body=`<h2>${esc(M.title)}</h2><p>${esc(M.msg)}</p><div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn ${M.danger?'d':'p'}" data-act="confirmOK">${esc(M.ok||'Aceptar')}</button></div>`;
   else if(M.t==='info')body=`<h2>${esc(M.title)}</h2><div>${M.html}</div><div class="mfoot"><button class="btn p" data-act="closeM">Entendido</button></div>`;
@@ -990,7 +1048,7 @@ async function iniciarSesionDemo(u,pw){S.loginErr='';u=String(u||'').trim().toLo
   try{const c=S.cuentas.find(x=>x.id===u),cr=S.creds[u];await sleep(300);
     if(!c||!cr||!cr.salt||(await hashPw(pw,cr.salt))!==cr.hash){S.loginErr='Usuario o contraseña incorrectos.';return}
     if(c.activo===false){S.loginErr='Este usuario está desactivado. Consulte al administrador.';return}
-    await setDoc('sesiones/'+S.uid,{usuario:u,tag:cr.hash.slice(0,16),t:nowISO()});S.sesion={usuario:u,tag:cr.hash.slice(0,16)};S.cuenta=u;S.view='inicio'}
+    await setDoc('sesiones/'+S.uid,{usuario:u,tag:cr.hash.slice(0,16),t:nowISO()});S.sesion={usuario:u,tag:cr.hash.slice(0,16)};S.cuenta=u;S.view='inicio';S.novChecked=false}
   catch(e){S.loginErr='No se pudo ingresar: '+(e.message||e.code||e)}finally{S.loggingIn=null;afterData();render()}}
 function hist(s,a){s.historial=s.historial||[];s.historial.push({t:nowISO(),uid:S.cuenta,a})}
 const esAlerta=c=>c.alerta!==false;
@@ -1166,7 +1224,7 @@ const ACT={
     const usuarios=S.cuentas.map(c=>{const cr=S.creds[c.id]||{},kv=claveDe(c.id);return {usuario:c.id,nombre:c.nombre,rol:c.rol,empresaId:c.empresaId||'',activo:c.activo!==false,correo1:cr.correo1||'',correo2:cr.correo2||'',correo3:cr.correo3||'',clave:kv?kv.clave:''}});
     const strip=l=>l.map(x=>{const o=clone(x);return o});
     const data={formato:'pedidos-material-tasa',version:1,fecha:nowISO(),usuarios,roles:clone(rolesList()),config:{plantillas:clone(S.plantillas||null),periodos:clone(S.periodos||null),cargos:clone(S.cargos||null),unidades:clone(S.unidades||null),diseno:clone(S.diseno||null)},
-      materiales:strip(S.materiales),embarcaciones:strip(S.embarcaciones),empresas:strip(S.empresas),solicitudes:strip(S.solicitudes),plantillasSol:strip(S.plantSol),notificaciones:strip(S.notifs),fotos};
+      materiales:strip(S.materiales),embarcaciones:strip(S.embarcaciones),empresas:strip(S.empresas),solicitudes:strip(S.solicitudes),plantillasSol:strip(S.plantSol),notificaciones:strip(S.notifs),mejoras:strip(S.mejoras),fotos};
     const ok=await saveFile('respaldo_pedidos_tasa_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(data));
     S.resProg=ok?`Respaldo descargado: ${usuarios.length} usuarios, ${data.materiales.length} materiales, ${data.solicitudes.length} solicitudes, ${Object.keys(fotos).length} fotos.`:'';render()},
   async exportarPost(){const d=S.draft;const pend=(d.items||[]).filter(i=>!i.reserva&&!sigueBloq(i));if(!pend.length||!window.XLSX)return;
@@ -1187,6 +1245,21 @@ const ACT={
       await setDoc('materiales/'+id,{codigo:'',ref:true,estadoRef:'pendiente',desc,um,espec:r.codigo?'Código indicado por la contrata: '+r.codigo:'',fotoId:'',fecha:nowISO(),por:S.cuenta}).catch(()=>{});
       d.items.push({codigo:'',refId:id,desc,um,cantidad:fmt(num(r.cantidad)),obs:r.obs,espec:r.codigo?'Código indicado: '+r.codigo:'',reserva:'',posicion:''});nref++}
     hist(d,`Importó una lista de ${R.length} materiales`);S.dirty=true;render();autoSaveSoon();toast(`${R.length} material(es) agregados${nref?` (${nref} referencial${nref>1?'es':''})`:''}. Revise las cantidades.`)},
+  novOK(){S.modal=null;render();marcarVista()},
+  novTodas(){S.modal={t:'novedades',L:CHANGELOG,todas:true};render()},
+  novAbrir(){S.modal={t:'novedades',L:CHANGELOG.slice(0,1)};render()},
+  novMejora(){S.modal=null;marcarVista();S.view='mejoras';render()},
+  async mejEnviar(){const N=S.mejN;if(!N.titulo.trim()||!N.descripcion.trim()){toast('Complete el título y la descripción.','bad');return}
+    let fotoId='';if(N.foto){fotoId='F-'+rid();await setDoc('fotos/'+fotoId,{data:N.foto}).catch(()=>{fotoId=''})}
+    const id=newId('mejoras');const c=miCuenta()||{};
+    try{await setDoc('mejoras/'+id,{titulo:N.titulo.trim(),tipo:N.tipo,importancia:N.importancia,descripcion:N.descripcion.trim(),por:S.cuenta,empresaId:c.empresaId||'',fecha:nowISO(),estado:'Recibida',votos:[S.cuenta],respuesta:'',respondido:'',fotoId})}catch(e){return}
+    S.mejN=null;render();toast('¡Gracias! Su propuesta fue enviada al equipo de Diseño.')},
+  async mejVoto(el){const m=S.mejoras.find(x=>x.id===el.dataset.id);if(!m)return;const b=clone(m);delete b.id;const v=new Set(b.votos||[]);if(v.has(S.cuenta))v.delete(S.cuenta);else v.add(S.cuenta);b.votos=[...v];await setDoc('mejoras/'+m.id,b).catch(()=>{})},
+  mejResp(el){const m=S.mejoras.find(x=>x.id===el.dataset.id);S.modal={t:'mejResp',m:clone(m),txt:m.respuesta||''};render()},
+  async mejRespOK(){const M=S.modal;const b=clone(M.m);delete b.id;b.respuesta=M.txt.trim();b.respondido=nowISO();if(b.estado==='Recibida'&&b.respuesta)b.estado='En evaluación';S.modal=null;render();await setDoc('mejoras/'+M.m.id,b);toast('Respuesta guardada')},
+  mejDel(el){const m=S.mejoras.find(x=>x.id===el.dataset.id);S.modal={t:'confirm',title:'Eliminar propuesta',msg:`¿Eliminar "${m.titulo}"?`,ok:'Eliminar',danger:true,fn:async()=>{await delDoc('mejoras/'+m.id);toast('Propuesta eliminada')}};render()},
+  async mejExport(){if(!window.XLSX)return;const rows=[['Fecha','Título','Tipo','Importancia','Descripción','Propuesto por','Empresa','Votos','Estado','Respuesta']].concat(S.mejoras.map(m=>[fdt(m.fecha),m.titulo,m.tipo,m.importancia,m.descripcion,nameOf(m.por),((empBy((S.cuentas.find(c=>c.id===m.por)||{}).empresaId||m.empresaId))||{}).nombre||'',(m.votos||[]).length,m.estado,m.respuesta||'']));
+    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:16},{wch:40},{wch:14},{wch:10},{wch:60},{wch:22},{wch:18},{wch:7},{wch:14},{wch:40}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Mejoras');await saveFile('buzon_mejoras_'+new Date().toISOString().slice(0,10)+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}))},
   async copiarRes(){const s=S.draft;const txt=(s.items||[]).map(i=>(i.reserva||'')+'\t'+(i.posicion||'')).join('\n');
     try{await navigator.clipboard.writeText(txt);toast('Copiado: péguelo en Excel o en su sistema')}catch(e){S.modal={t:'info',title:'Reservas y posiciones',html:`<p class="small">Seleccione todo y copie (Ctrl+C):</p><textarea rows="12" readonly>${esc(txt)}</textarea>`};render()}},
   async xlRes(){if(!window.XLSX)return;await saveFile(nombreArchivo(S.draft),buildXL(S.draft))},
@@ -1288,6 +1361,8 @@ const ACT={
 };
 function confirmLeave(){return true}
 const CH={
+  async mejFoto(el){const f=el.files[0];if(!f)return;try{S.mejN.foto=await resizeImg(f);render()}catch(e){toast('No se pudo leer la imagen','bad')}},
+  async mejEstado(el){const m=S.mejoras.find(x=>x.id===el.dataset.id);const b=clone(m);delete b.id;b.estado=el.value;await setDoc('mejoras/'+m.id,b);toast('Estado: '+el.value)},
   async impListaFile(el){const f=el.files[0];if(!f)return;try{const rows=await readXL(f);const R=filasLista(rows);if(!R.length){toast('No se encontraron columnas Código / Descripción / Cantidad en el archivo.','bad');return}S.modal.rows=R.map(emparejar);render()}catch(e){toast('No se pudo leer el archivo: '+e.message,'bad')}},
   impUsar(el){S.modal.rows[+el.dataset.i].usar=el.checked;render()},
   async estSap(el){const d=S.draft,i=+el.dataset.i,it=d.items[i],v=el.value;setEstSap(it,v);hist(d,`Código ${it.codigo}: ${v||'sin estado SAP'}`);
@@ -1387,7 +1462,7 @@ function subscribeFB(){const db=FB.raw;const t=setTimeout(()=>{S.stale=true;rend
   const col=(name,key,map)=>subs.push(db.collection(name).onSnapshot(sn=>{const l=sn.docs.map(d=>({...d.data(),id:d.id}));if(map)map(l);else S[key]=l;if(!sn.metadata.fromCache)done(key);afterData()},fail(key)));
   col('catalogo','cat',l=>{chunks={};l.forEach(d=>chunks[d.id]=d.items||{});rebuildMat()});
   col('materiales','refs',l=>{refDocs=l;rebuildMat()});
-  col('embarcaciones','embarcaciones');col('empresas','empresas');col('plantillasSol','plantSol');col('notificaciones','notifs');
+  col('embarcaciones','embarcaciones');col('empresas','empresas');col('plantillasSol','plantSol');col('notificaciones','notifs');col('mejoras','mejoras');
   col('cuentas','cuentas',l=>{S.cuentas=l;const m={};l.forEach(c=>m[c.id]=c);S.creds=m});
   col('rolesCfg','rolesCfg',l=>{S.rolesCfg=l.sort((a,b)=>(a.orden??99)-(b.orden??99)).map(r=>({id:r.id,nombre:r.nombre,permisos:r.permisos||[]}))});
   if(S.me&&S.me.rol==='admin')col('claves','claves');
@@ -1408,7 +1483,7 @@ function afterData(){if(!S.fb)return afterDataDemo();
   if(S.cuenta&&S.loaded.cuentas){const c=S.cuentas.find(x=>x.id===S.cuenta);if(!c||c.activo===false){toast('Su usuario fue desactivado o eliminado.');FB.auth.signOut();return}S.owner=c.rol==='admin';S.me=c}
   const c=miCuenta();S.realRole=c?c.rol:null;if(!S.viewAs)S.role=S.realRole;ensureSolSub();
   if(S.draft&&!S.dirty&&!S.isNew){const s=S.solicitudes.find(x=>x.id===S.sel);if(s)S.draft=clone(s)}
-  schedule()}
+  checkNovedades();schedule()}
 function claveDe(u){if(!S.fb)return claveDeDemo(u);const d=S.claves.find(x=>x.id===u);return d?{clave:d.clave,t:d.t,por:d.por}:null}
 function ultimoIngreso(u){if(!S.fb)return ultimoIngresoDemo(u);const c=S.cuentas.find(x=>x.id===u);return (c&&c.ultimoIngreso)||''}
 async function conSecundaria(fn){const a=FB.secAuth;try{return await fn(a)}finally{try{await a.signOut()}catch(e){}}}
@@ -1428,7 +1503,7 @@ async function onAuth(u){if(S.bootstrapping)return;stopSubs();resetData();
   const un=String(u.email||'').split('@')[0];let c=null;
   try{const sn=await FB.raw.doc('cuentas/'+un).get();c=sn.exists?sn.data():null}catch(e){console.warn(e)}
   if(!c||c.activo===false){S.loginErr=c?'Este usuario está desactivado. Consulte al administrador.':'Su usuario no está habilitado en la app. Consulte al administrador.';await FB.auth.signOut();return}
-  S.uid=u.uid;S.cuenta=un;S.me={...c,id:un};S.owner=c.rol==='admin';S.view='inicio';S.loginErr='';
+  S.uid=u.uid;S.cuenta=un;S.me={...c,id:un};S.novChecked=false;S.owner=c.rol==='admin';S.view='inicio';S.loginErr='';
   FB.raw.doc('cuentas/'+un).update({ultimoIngreso:nowISO()}).catch(()=>{});
   subscribe();S.boot='ok';render()}
 
@@ -1492,7 +1567,7 @@ async function importar(D){const db=FB.raw;const prog=m=>{S.resProg=m;S.gTab='da
   const lotes=async(col,list)=>{for(let k=0;k<list.length;k+=400){const b=db.batch();list.slice(k,k+400).forEach(([id,o])=>b.set(db.doc(col+'/'+id),clone(o)));await b.commit();prog(`${col}: ${Math.min(k+400,list.length)}/${list.length}…`)}};
   const pares=l=>(l||[]).map(x=>{const o=clone(x);const id=o.id;delete o.id;return [id,o]});
   await lotes('materiales',refs);await lotes('empresas',pares(D.empresas));await lotes('embarcaciones',pares(D.embarcaciones));
-  await lotes('plantillasSol',pares(D.plantillasSol));await lotes('notificaciones',pares(D.notificaciones));await lotes('solicitudes',pares(D.solicitudes));
+  await lotes('plantillasSol',pares(D.plantillasSol));await lotes('notificaciones',pares(D.notificaciones));await lotes('solicitudes',pares(D.solicitudes));await lotes('mejoras',pares(D.mejoras));
   /* 5. Fotos */
   const F=Object.entries(D.fotos||{});let n=0;for(const [id,data] of F){await db.doc('fotos/'+id).set({data});n++;prog(`Fotos ${n}/${F.length}…`)}
   prog(`Importación completa.${avisos.length?' Revise: '+avisos.join(' · '):''}`)}
