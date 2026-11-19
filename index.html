@@ -320,7 +320,7 @@ function parseObs(obs){const s=String(obs||'').toLowerCase().replace(',','.');
 
 /* ============ Estado ============ */
 const S={boot:'loading',demo:false,db:null,user:null,dl:null,uid:null,owner:false,role:null,realRole:null,
-  materiales:[],embarcaciones:[],solicitudes:[],plantSol:[],unidades:null,notifs:[],empresas:[],cuentas:[],creds:{},claves:[],sesiones:[],rolesCfg:null,periodos:null,cargos:null,plantillas:null,
+  materiales:[],embarcaciones:[],solicitudes:[],plantSol:[],unidades:null,diseno:null,notifs:[],empresas:[],cuentas:[],creds:{},claves:[],sesiones:[],rolesCfg:null,periodos:null,cargos:null,plantillas:null,
   sesion:undefined,cuenta:null,per:'',
   view:'inicio',sel:null,draft:null,dirty:false,modal:null,filt:{q:'',estado:'',emb:'',empresa:''},matTab:'cat',matQ:'',gTab:'cuenta',loaded:{},stale:false};
 const rolesList=()=>(S.rolesCfg&&S.rolesCfg.length)?S.rolesCfg:DEF_ROLES;
@@ -382,7 +382,7 @@ function subscribeDemo(){
   col('credenciales','creds',l=>{const m={};l.forEach(c=>m[c.id]=c);S.creds=m});
   if(S.owner){col('claves','claves');col('sesiones','sesiones')}
   const cfg=(id,key)=>S.db.doc('config/'+id).onSnapshot(sn=>{S[key]=sn.exists?clone(sn.data().list):null;afterData()},()=>{});
-  cfg('plantillas','plantillas');cfg('roles','rolesCfg');cfg('periodos','periodos');cfg('cargos','cargos');cfg('unidades','unidades');
+  cfg('plantillas','plantillas');cfg('roles','rolesCfg');cfg('periodos','periodos');cfg('cargos','cargos');cfg('unidades','unidades');cfg('diseno','diseno');
   if(S.uid)S.db.doc('sesiones/'+S.uid).onSnapshot(sn=>{S.sesion=sn.exists?clone(sn.data()):null;afterData()},()=>{S.sesion=null;afterData()});
   else S.sesion=null;
 }
@@ -612,17 +612,28 @@ function vDetalle(){const s=S.draft;if(!s)return '<div class="empty">Seleccione 
   ${correosCard(s)}
   <div class="card"><h2>Historial</h2><div class="hist">${(s.historial||[]).slice().reverse().map(x=>`<div><b>${esc(fdt(x.t))}</b> · ${esc(nameOf(x.uid))}: ${esc(x.a)}</div>`).join('')||'—'}</div></div>
   </div></div>`}
-function correosDe(s){const out=[];const c=S.cuentas.find(x=>x.id===s.createdBy&&x.empresaId&&x.empresaId===s.empresaId),cr=c&&S.creds[c.id];const e=empBy(s.empresaId)||{};
-  const prov=cr&&[cr.correo1,cr.correo2,cr.correo3].some(Boolean)?[cr.correo1,cr.correo2,cr.correo3]:[e.correo1,e.correo2,e.correo3];
-  prov.filter(Boolean).forEach(m=>out.push({cargo:'Proveedor'+(e.nombre?' · '+e.nombre:''),correo:m}));
-  const emb=embBy((s.header||{}).proyecto);(emb&&emb.contactos||[]).filter(x=>x.correo).forEach(x=>out.push({cargo:(esAlerta(x)?'🔔 ':'')+x.cargo,nombre:x.nombre,correo:x.correo}));return out}
-function correosCard(s){const L=correosDe(s);if(!L.length)return '';const all=[...new Set(L.map(x=>x.correo))].join('; ');
-  return `<div class="card"><h2>Correos a notificar</h2>${L.map(x=>`<div class="small" style="padding:3px 0"><b>${esc(x.cargo||'')}</b>${x.nombre?' — '+esc(x.nombre):''}<br><span class="mono">${esc(x.correo)}</span></div>`).join('')}
-   <div class="row" style="margin-top:8px"><button class="btn s" data-act="copiar" data-txt="${esc(all)}">Copiar correos</button><button class="btn s" data-act="copiarMsg">Copiar mensaje</button></div>
+const DEF_DISENO=['aidrogo@tasa.com.pe','onavarro@tasa.com.pe','hcuellar@tasa.com.pe','lmontenegro@tasa.com.pe','gmunoz@tasa.com.pe'];
+const splitMails=t=>String(t||'').split(/[;,\s]+/).map(x=>x.trim().toLowerCase()).filter(x=>/^\S+@\S+\.\S+$/.test(x));
+const uniq=l=>[...new Set(l)];
+const disenoList=()=>(S.diseno&&S.diseno.length)?S.diseno:DEF_DISENO;
+/* Correo 1 = contrata · Correo 2 = responsables de la embarcación · Correo 3 = personal de diseño */
+function correosSol(s){const c=S.cuentas.find(x=>x.id===s.createdBy&&x.empresaId&&x.empresaId===s.empresaId),cr=c&&S.creds[c.id];const e=empBy(s.empresaId)||{};
+  const propios=cr?splitMails([cr.correo1,cr.correo2,cr.correo3].join(';')):[];
+  const c1=uniq(propios.length?propios:splitMails([e.correo1,e.correo2,e.correo3].join(';')));
+  const emb=embBy((s.header||{}).proyecto);const con=((emb&&emb.contactos)||[]).filter(x=>x.correo&&esAlerta(x));
+  const c3=uniq([...disenoList(),...con.filter(x=>x.cargo===CARGO_ALERTA).flatMap(x=>splitMails(x.correo))]);
+  const c2=uniq(con.filter(x=>x.cargo!==CARGO_ALERTA).flatMap(x=>splitMails(x.correo))).filter(m=>!c3.includes(m));
+  return {c1,c2,c3,contactos:con,empresa:e}}
+function correosDe(s){const C=correosSol(s),out=[];C.c1.forEach(m=>out.push({cargo:'Proveedor'+(C.empresa.nombre?' · '+C.empresa.nombre:''),correo:m}));
+  C.contactos.forEach(x=>out.push({cargo:x.cargo,nombre:x.nombre,correo:x.correo}));return out}
+function correosCard(s){const C=correosSol(s);const grp=(t,sub,l)=>`<div style="margin-bottom:8px"><div class="small"><b>${t}</b> <span class="muted">${sub}</span></div>${l.length?`<div class="mono small" style="word-break:break-all">${l.map(esc).join('; ')}</div>`:'<div class="small muted">— sin correos —</div>'}</div>`;
+  return `<div class="card"><h2>Correos de la solicitud</h2>
+   ${grp('Correo 1 · Contrata','',C.c1)}${grp('Correo 2 · Responsables','(CC de la alerta)',C.c2)}${grp('Correo 3 · Diseño','(PARA de la alerta)',C.c3)}
+   <div class="row" style="margin-top:4px"><button class="btn s" data-act="copiar" data-txt="${esc(uniq([...C.c1,...C.c2,...C.c3]).join('; '))}">Copiar todos</button><button class="btn s" data-act="copiarMsg">Copiar mensaje</button></div>
    ${alertaInfo(s)}</div>`}
 function alertaInfo(s){const n=s.alertaId&&S.notifs.find(x=>x.id===s.alertaId);
-  if(n)return `<div class="small" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:8px">🔔 Alerta a ${esc(CARGO_ALERTA.toLowerCase())}: ${n.estado==='enviada'?`<b style="color:var(--ok)">enviada</b> ${esc(fdt(n.enviada))}`:'<b style="color:var(--warn)">pendiente de enviar</b>'} <button class="btn s" data-act="verAlerta" data-id="${esc(n.id)}">Ver</button></div>`;
-  if(!['Borrador','Observada','Anulada'].includes(s.estado)&&!S.isNew)return `<div style="margin-top:10px"><button class="btn s" data-act="generarAlerta">🔔 Generar alerta a ${esc(CARGO_ALERTA.toLowerCase())}</button></div>`;return ''}
+  if(n)return `<div class="small" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:8px">🔔 Alerta (Para diseño · CC responsables): ${n.estado==='enviada'?`<b style="color:var(--ok)">enviada</b> ${esc(fdt(n.enviada))}`:'<b style="color:var(--warn)">pendiente de enviar</b>'} <button class="btn s" data-act="verAlerta" data-id="${esc(n.id)}">Ver</button></div>`;
+  if(!['Borrador','Observada','Anulada'].includes(s.estado)&&!S.isNew)return `<div style="margin-top:10px"><button class="btn s" data-act="generarAlerta">🔔 Generar alerta de la solicitud</button></div>`;return ''}
 function acciones(s,err){const b=[],e=s.estado,pl=can('validar'),own=s.createdBy===S.cuenta||s.empresaId===myEmpresa();
   if(cerrada(s)){if(can('eliminar')&&!S.isNew)b.push(`<button class="btn d" data-act="eliminarSol">Eliminar definitivamente</button>`);return b.join('')||'<span class="muted small">Proyecto cerrado: solo lectura.</span>'}
   const bloqEnv=revisar(s).filter(x=>x.n==='error'||x.envio).length;
@@ -675,17 +686,17 @@ function vEmb(){const ed=can('editar_emb');const f=S.embF||'';
 
 /* ---------- Gestión ---------- */
 function vGestion(){const adm=can('usuarios'),T=[['cuenta','Mi cuenta']];
-  if(adm)T.push(['usuarios','Usuarios'],['empresas','Empresas'],['roles','Roles'],['periodos','Periodos'],['cargos','Cargos'],['unidades','Unidades']);
+  if(adm)T.push(['usuarios','Usuarios'],['empresas','Empresas'],['roles','Roles'],['periodos','Periodos'],['cargos','Cargos'],['correos','Correos'],['unidades','Unidades']);
   if(can('validar'))T.push(['alertas','Alertas'+(S.notifs.filter(n=>n.estado!=='enviada').length?' ('+S.notifs.filter(n=>n.estado!=='enviada').length+')':'')]);
   if(can('eliminar'))T.push(['datos','Eliminar datos']);
   if(!T.some(t=>t[0]===S.gTab))S.gTab='cuenta';
-  const body={cuenta:gCuenta,usuarios:gUsuarios,alertas:gAlertas,unidades:gUnidades,empresas:gEmpresas,roles:gRoles,periodos:gPeriodos,cargos:gCargos,datos:gDatos}[S.gTab]();
+  const body={cuenta:gCuenta,usuarios:gUsuarios,alertas:gAlertas,unidades:gUnidades,correos:gCorreos,empresas:gEmpresas,roles:gRoles,periodos:gPeriodos,cargos:gCargos,datos:gDatos}[S.gTab]();
   return `<div class="head"><h1>Gestión</h1></div><div class="tabs" style="overflow-x:auto">${T.map(([k,l])=>`<button class="${S.gTab===k?'on':''}" data-act="gTab" data-t="${k}">${l}</button>`).join('')}</div>${body}`}
 const soloProp=()=>S.owner?'':'<div class="warn" style="margin-bottom:10px">Solo la propietaria del enlace puede guardar cambios en usuarios y roles.</div>';
 function gCuenta(){const c=miCuenta()||{},cr=S.creds[c.id]||{};const M=S.mc||(S.mc={a:'',n:'',r:'',c1:cr.correo1||'',c2:cr.correo2||'',c3:cr.correo3||''});
   if(c.id==='__owner__')return '<div class="card">Acceso de recuperación: cree su usuario en la pestaña Usuarios.</div>';
   return `<div class="grid g2"><div class="card"><h2>Mis datos</h2><div class="small"><b>Usuario:</b> <span class="mono">${esc(c.id)}</span><br><b>Nombre:</b> ${esc(c.nombre)}<br><b>Rol:</b> ${esc(rolNombre(c.rol))}<br><b>Empresa:</b> ${esc((empBy(c.empresaId)||{}).nombre||'—')}</div>
-   <h2 style="margin-top:16px">Correos de envío</h2><p class="small muted" style="margin-top:-6px">Se usan como Correo 1, 2 y 3 en el Excel de carga de sus solicitudes.</p>
+   <h2 style="margin-top:16px">Correos de envío</h2><p class="small muted" style="margin-top:-6px">Se usan en la columna Correo 1 (contrata) del Excel de carga de sus solicitudes. Puede poner varios correos en un mismo campo separados con punto y coma.</p>
    <div class="grid">${[1,2,3].map(n=>`<div><label>Correo ${n}</label><input type="email" data-b="mc.c${n}" value="${esc(M['c'+n])}"></div>`).join('')}<button class="btn p" data-act="guardarCorreos">Guardar correos</button></div></div>
   <div class="card"><h2>Cambiar contraseña</h2><div class="grid"><div><label>Contraseña actual</label><input type="password" data-b="mc.a" value="${esc(M.a)}"></div><div><label>Nueva contraseña (mín. 6)</label><input type="password" data-b="mc.n" value="${esc(M.n)}"></div><div><label>Repetir nueva contraseña</label><input type="password" data-b="mc.r" value="${esc(M.r)}"></div>
    <button class="btn p" data-act="cambiarPw">Cambiar contraseña</button><p class="small muted">El administrador puede ver su contraseña para ayudarle si la olvida. Use una contraseña que no use en otros servicios.</p></div></div></div>`}
@@ -699,8 +710,16 @@ function gUsuarios(){const L=S.cuentas.slice().sort((a,b)=>a.id.localeCompare(b.
    <td><button class="btn s" data-act="userModal" data-id="${esc(c.id)}">Editar</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Aún no hay usuarios.</div>'}
   <p class="small muted" style="margin-top:10px">Comparta el enlace de la app con cada persona y entréguele su usuario y contraseña. Al abrir el enlace se le pedirá ingresar con ellos.</p></div>`}
 function gAlertas(){const L=S.notifs.slice().sort((a,b)=>String(b.creado).localeCompare(String(a.creado)));
-  return `<div class="card"><h2>Alertas de nuevas solicitudes</h2><p class="small muted" style="margin-top:-6px">Se generan al enviar una solicitud (o al importar un Excel recibido) para los contactos marcados con 🔔 de cada embarcación.</p>
-  ${L.length?`<table class="rs"><thead><tr><th>Fecha</th><th>Embarcación</th><th>Para</th><th>Asunto</th><th>Estado</th><th></th></tr></thead><tbody>${L.map(n=>`<tr><td data-l="Fecha">${esc(fdt(n.creado))}</td><td data-l="Embarcación">${esc(n.embarcacion)}</td><td data-l="Para" class="small mono">${(n.para||[]).map(esc).join('<br>')}</td><td data-l="Asunto" class="small">${esc(n.asunto)}</td><td data-l="Estado">${n.estado==='enviada'?'<span class="chip e-Validada">Enviada</span>':'<span class="chip e-Exportada">Pendiente</span>'}</td><td><div class="row" style="flex-wrap:nowrap"><button class="btn s" data-act="verAlerta" data-id="${esc(n.id)}">Ver / enviar</button>${S.solicitudes.some(x=>x.id===n.solicitudId)?`<button class="btn s" data-act="open" data-id="${esc(n.solicitudId)}">Solicitud</button>`:''}</div></td></tr>`).join('')}</tbody></table>`:'<div class="empty">Aún no hay alertas.</div>'}</div>`}
+  return `<div class="card"><h2>Alertas de nuevas solicitudes</h2><p class="small muted" style="margin-top:-6px">Se generan al enviar una solicitud (o al importar un Excel recibido): PARA el personal de diseño (Correo 3) y CC a los responsables de la embarcación (Correo 2).</p>
+  ${L.length?`<table class="rs"><thead><tr><th>Fecha</th><th>Embarcación</th><th>Para / CC</th><th>Asunto</th><th>Estado</th><th></th></tr></thead><tbody>${L.map(n=>`<tr><td data-l="Fecha">${esc(fdt(n.creado))}</td><td data-l="Embarcación">${esc(n.embarcacion)}</td><td data-l="Para / CC" class="small mono">${(n.para||[]).map(esc).join('<br>')}${(n.cc||[]).length?`<div class="muted">CC: ${n.cc.map(esc).join('<br>')}</div>`:''}</td><td data-l="Asunto" class="small">${esc(n.asunto)}</td><td data-l="Estado">${n.estado==='enviada'?'<span class="chip e-Validada">Enviada</span>':'<span class="chip e-Exportada">Pendiente</span>'}</td><td><div class="row" style="flex-wrap:nowrap"><button class="btn s" data-act="verAlerta" data-id="${esc(n.id)}">Ver / enviar</button>${S.solicitudes.some(x=>x.id===n.solicitudId)?`<button class="btn s" data-act="open" data-id="${esc(n.solicitudId)}">Solicitud</button>`:''}</div></td></tr>`).join('')}</tbody></table>`:'<div class="empty">Aún no hay alertas.</div>'}</div>`}
+function gCorreos(){const t=S.disEd??disenoList().join('\n');
+  return `<div class="card"><h2>Personal de diseño · Correo 3</h2><p class="small muted" style="margin-top:-6px">Reciben como <b>PARA</b> la alerta de cada nueva solicitud y van en la columna <b>Correo 3</b> del Excel de carga. Escriba un correo por línea (o separados por punto y coma). Actualícelos cuando haya rotación de puestos.</p>
+   <textarea rows="7" class="mono" data-b="disEd">${esc(t)}</textarea>
+   <div class="row" style="margin-top:8px"><span class="small muted">${splitMails(t).length} correo(s) válido(s)</span><div style="flex:1"></div><button class="btn p" data-act="disOK">Guardar correos de diseño</button></div></div>
+  <div class="card small"><b>Cómo se llenan los correos</b><br>
+   <b>Correo 1 · Contrata:</b> los correos que el proveedor registró en <i>Mi cuenta</i>; si no registró, los de su empresa (Gestión → Empresas).<br>
+   <b>Correo 2 · Responsables:</b> los contactos de cada embarcación (Embarcaciones → Editar) que no son de diseño.<br>
+   <b>Correo 3 · Diseño:</b> esta lista, más los contactos de la embarcación con cargo “${esc(CARGO_ALERTA)}”.<br>Varios correos en un mismo campo se separan con punto y coma ( ; ), como espera el Excel.</div>`}
 function gEmpresas(){return `<div class="card"><div class="row" style="margin-bottom:8px"><h2 style="margin:0">Empresas proveedoras</h2><div style="flex:1"></div><button class="btn s a" data-act="empModal">+ Empresa</button></div>
    ${S.empresas.length?`<table class="rs"><thead><tr><th>Empresa</th><th>Correos (por defecto)</th><th>Usuarios</th><th></th></tr></thead><tbody>${S.empresas.map(e=>`<tr><td data-l="Empresa"><b>${esc(e.nombre)}</b></td><td data-l="Correos" class="small">${[e.correo1,e.correo2,e.correo3].filter(Boolean).map(esc).join('<br>')||'—'}</td><td data-l="Usuarios">${S.cuentas.filter(c=>c.empresaId===e.id).map(c=>esc(c.id)).join(', ')||'—'}</td><td><button class="btn s" data-act="empModal" data-id="${esc(e.id)}">Editar</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">Sin empresas.</div>'}
    <p class="small muted">Los correos de la empresa se usan solo si el usuario que creó la solicitud no registró los suyos.</p></div>`}
@@ -902,7 +921,7 @@ function mEmb(M){const v=M.v;return `<h2>${M.isNew?'Nueva embarcación':'Editar 
   <div class="grid" style="grid-template-columns:2fr 1fr"><div><label>Nombre (como figura en "Proyecto")</label><input data-b="modal.v.nombre" value="${esc(v.nombre)}" placeholder="RM HERCULES 1"></div><div><label>Estado del proyecto</label><select data-b="modal.v.estado">${EST_PROY.map(x=>`<option ${estProy(v)===x?'selected':''}>${x}</option>`).join('')}</select></div></div>
   <div class="card" style="margin:12px 0 0;background:#fffaf2"><div class="row"><b>Contactos que reciben correos</b><div style="flex:1"></div><button class="btn s" data-act="embAddCon">+ Contacto</button></div>
    ${(v.contactos||[]).map((c,i)=>`<div class="grid" style="grid-template-columns:1.2fr 1.2fr 1.6fr auto;margin-top:10px;align-items:center"><select data-b="modal.v.contactos.${i}.cargo">${cargosList().concat(cargosList().includes(c.cargo)||!c.cargo?[]:[c.cargo]).map(x=>`<option ${c.cargo===x?'selected':''}>${esc(x)}</option>`).join('')}</select><input placeholder="Nombre" data-b="modal.v.contactos.${i}.nombre" value="${esc(c.nombre)}"><input type="email" placeholder="correo@empresa.com" data-b="modal.v.contactos.${i}.correo" value="${esc(c.correo)}"><button class="btn s d" data-act="embDelCon" data-i="${i}">✕</button></div>
-   <label style="display:flex;gap:6px;align-items:center;font-weight:500;margin:4px 0 0;font-size:12px"><input type="checkbox" style="width:auto" data-b="modal.v.contactos.${i}.alerta" ${(c.alerta===undefined?c.cargo===CARGO_ALERTA:c.alerta)?'checked':''}> Recibe alerta cuando se registra una solicitud</label>`).join('')||'<div class="small muted" style="margin-top:6px">Sin contactos. Los cargos se definen en Gestión → Cargos.</div>'}</div>
+   <label style="display:flex;gap:6px;align-items:center;font-weight:500;margin:4px 0 0;font-size:12px"><input type="checkbox" style="width:auto" data-b="modal.v.contactos.${i}.alerta" ${c.alerta!==false?'checked':''}> Incluir en los correos de la solicitud (${c.cargo===CARGO_ALERTA?'Correo 3 · PARA':'Correo 2 · CC'})</label>`).join('')||'<div class="small muted" style="margin-top:6px">Sin contactos. Los cargos se definen en Gestión → Cargos.</div>'}</div>
   ${(v.sistemas||[]).map((s,i)=>`<div class="card" style="margin:12px 0 0;background:#f8fafc"><div class="grid" style="grid-template-columns:2fr 1fr auto;align-items:end"><div><label>Sistema</label><input data-b="modal.v.sistemas.${i}.nombre" value="${esc(s.nombre)}"></div><div><label>Grafo</label><input class="mono" data-b="modal.v.sistemas.${i}.grafo" value="${esc(s.grafo)}"></div><button class="btn s d" data-act="embDelSis" data-i="${i}">✕</button></div>
    ${(s.actividades||[]).map((a,j)=>`<div class="grid" style="grid-template-columns:90px 1fr auto;margin-top:6px;align-items:center"><input class="mono" placeholder="Pos" data-b="modal.v.sistemas.${i}.actividades.${j}.pos" value="${esc(a.pos)}"><input placeholder="Nombre de actividad" data-b="modal.v.sistemas.${i}.actividades.${j}.nombre" value="${esc(a.nombre)}"><button class="btn s d" data-act="embDelAct" data-i="${i}" data-j="${j}">✕</button></div>`).join('')}
    <button class="btn s" style="margin-top:8px" data-act="embAddAct" data-i="${i}">+ Actividad</button></div>`).join('')}
@@ -974,24 +993,25 @@ async function iniciarSesionDemo(u,pw){S.loginErr='';u=String(u||'').trim().toLo
     await setDoc('sesiones/'+S.uid,{usuario:u,tag:cr.hash.slice(0,16),t:nowISO()});S.sesion={usuario:u,tag:cr.hash.slice(0,16)};S.cuenta=u;S.view='inicio'}
   catch(e){S.loginErr='No se pudo ingresar: '+(e.message||e.code||e)}finally{S.loggingIn=null;afterData();render()}}
 function hist(s,a){s.historial=s.historial||[];s.historial.push({t:nowISO(),uid:S.cuenta,a})}
-const esAlerta=c=>c.alerta===undefined?c.cargo===CARGO_ALERTA:!!c.alerta;
+const esAlerta=c=>c.alerta!==false;
 function alertaTexto(d){const h=d.header,e=empBy(d.empresaId);
   const act=h.nombreActividad||h.actividadTentativa||'';const asunto=`Nueva solicitud de material — ${h.proyecto||'Sin embarcación'} / ${h.sistema||''}${h.pos?' / Pos. '+h.pos:''}${act?' — '+act:''} — ${e?e.nombre:(h.empresaTxt||nameOf(d.createdBy))}`;
   const cuerpo=`Se registró una nueva solicitud de material.\n\nEmbarcación: ${h.proyecto||'—'}\nSistema: ${h.sistema||'—'}\nGrafo: ${h.grafo||'—'} · Pos.: ${h.pos||'—'}\nActividad: ${h.nombreActividad||h.actividadTentativa||'—'}\nProveedor: ${e?e.nombre:(h.empresaTxt||'—')} (registrada por ${nameOf(d.createdBy)})\nFecha: ${fdt(d.fechaSolicitud)}\n${h.consideraciones?'Consideraciones: '+h.consideraciones+'\n':''}\nMateriales (${(d.items||[]).length}):\n`+(d.items||[]).map((i,k)=>`${k+1}. ${i.codigo||'REF'} ${i.desc} — ${i.cantidad} ${i.um}${i.obs?' ('+i.obs+')':''}`).join('\n')+`\n\nRevise la solicitud en la app de Pedidos de Material.`;
   return {asunto,cuerpo}}
-async function crearAlerta(d){const emb=embBy(d.header.proyecto);const para=[...new Set(((emb&&emb.contactos)||[]).filter(esAlerta).map(c=>c.correo).filter(Boolean))];
-  if(!para.length){if(can('editar_emb'))toast(`No hay "${CARGO_ALERTA}" registrados en ${d.header.proyecto||'la embarcación'}: no se generó alerta.`);return}
+async function crearAlerta(d){const C=correosSol(d);const para=C.c3,cc=C.c2;
+  if(!para.length){toast('No hay correos del personal de diseño (Gestión → Correos): no se generó la alerta.');return}
   const {asunto,cuerpo}=alertaTexto(d);const id=newId('notificaciones');
-  const n={solicitudId:d.id,embarcacion:d.header.proyecto,para,asunto,cuerpo,estado:'pendiente',creado:nowISO(),por:S.cuenta};
+  const n={solicitudId:d.id,embarcacion:d.header.proyecto,para,cc,asunto,cuerpo,estado:'pendiente',creado:nowISO(),por:S.cuenta};
   await setDoc('notificaciones/'+id,n).catch(()=>{});d.alertaId=id;await saveDraft(null,true).catch(()=>{});
   S.modal={t:'alerta',n:{id,...n}};render()}
-function mailtoDe(n){return 'mailto:'+n.para.map(encodeURIComponent).join(',')+'?subject='+encodeURIComponent(n.asunto)+'&body='+encodeURIComponent(n.cuerpo.length>1800?n.cuerpo.slice(0,1800)+'\n…':n.cuerpo)}
-function mAlerta(M){const n=M.n;return `<h2>🔔 Alerta para encargados de diseño</h2>
+function mailtoDe(n){return 'mailto:'+n.para.map(encodeURIComponent).join(',')+'?'+((n.cc||[]).length?'cc='+n.cc.map(encodeURIComponent).join(',')+'&':'')+'subject='+encodeURIComponent(n.asunto)+'&body='+encodeURIComponent(n.cuerpo.length>1800?n.cuerpo.slice(0,1800)+'\n…':n.cuerpo)}
+function mAlerta(M){const n=M.n;return `<h2>🔔 Alerta de nueva solicitud</h2>
   <p class="small muted" style="margin-top:-8px">La alerta quedó registrada. Envíela desde su correo con un clic (o copie el texto si su correo no se abre).</p>
-  <label>Para</label><div class="mono small" style="margin-bottom:8px">${n.para.map(esc).join('; ')}</div>
+  <label>Para · Diseño</label><div class="mono small" style="margin-bottom:8px;word-break:break-all">${n.para.map(esc).join('; ')}</div>
+  <label>CC · Responsables</label><div class="mono small" style="margin-bottom:8px;word-break:break-all">${(n.cc||[]).map(esc).join('; ')||'—'}</div>
   <label>Asunto</label><div class="small" style="margin-bottom:8px"><b>${esc(n.asunto)}</b></div>
   <label>Mensaje</label><textarea rows="9" readonly>${esc(n.cuerpo)}</textarea>
-  <div class="mfoot" style="justify-content:flex-start"><a class="btn a" href="${esc(mailtoDe(n))}" target="_blank" rel="noopener">✉ Abrir en mi correo</a><button class="btn" data-act="copiar" data-txt="${esc(n.para.join('; '))}">Copiar destinatarios</button><button class="btn" data-act="copiar" data-txt="${esc(n.asunto+'\n\n'+n.cuerpo)}">Copiar mensaje</button><div style="flex:1"></div><button class="btn ok" data-act="alertaEnviada" data-id="${esc(n.id)}">Marcar como enviada</button><button class="btn" data-act="closeM">Cerrar</button></div>`}
+  <div class="mfoot" style="justify-content:flex-start"><a class="btn a" href="${esc(mailtoDe(n))}" target="_blank" rel="noopener">✉ Abrir en mi correo</a><button class="btn" data-act="copiar" data-txt="${esc(n.para.join('; '))}">Copiar Para</button><button class="btn" data-act="copiar" data-txt="${esc((n.cc||[]).join('; '))}">Copiar CC</button><button class="btn" data-act="copiar" data-txt="${esc(n.asunto+'\n\n'+n.cuerpo)}">Copiar mensaje</button><div style="flex:1"></div><button class="btn ok" data-act="alertaEnviada" data-id="${esc(n.id)}">Marcar como enviada</button><button class="btn" data-act="closeM">Cerrar</button></div>`}
 async function saveDraft(msg,quiet){const s=S.draft;s.updatedAt=nowISO();if(msg)hist(s,msg);
   const body=clone(s);delete body.id;S.dirty=false;clearTimeout(autoT);await setDoc('solicitudes/'+s.id,body);S.isNew=false;S.lastAuto=quiet?new Date():null;if(quiet)refreshSide();else render();}
 const tieneContenido=d=>d&&((d.items||[]).length||d.header.proyecto||d.header.actividadTentativa||d.header.consideraciones);
@@ -1023,7 +1043,7 @@ function sanitize(s){return String(s||'').replace(/[^A-Za-z0-9]/g,'_')}
 function nombreArchivo(s){const h=s.header,d=new Date(s.fechaSolicitud||Date.now());const p=n=>String(n).padStart(2,'0');
   return `${sanitize(h.proyecto)}-${sanitize(h.sistema)}-${sanitize(String(h.consideraciones||h.nombreActividad||'').slice(0,52))}_${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}.xlsx`}
 const asNum=v=>/^\d+$/.test(String(v??'').trim())?Number(v):(String(v??'').trim()||null);
-function buildXL(s,solo){const h=s.header,e0=empBy(s.empresaId)||{};const pm=correosDe(s).filter(x=>String(x.cargo).startsWith('Proveedor')).map(x=>x.correo);const e={nombre:e0.nombre,correo1:pm[0]||'',correo2:pm[1]||'',correo3:pm[2]||''};const rows=[XL_HEAD];
+function buildXL(s,solo){const h=s.header,e0=empBy(s.empresaId)||{};const C=correosSol(s);const e={nombre:e0.nombre,correo1:C.c1.join(';'),correo2:C.c2.join(';'),correo3:C.c3.join(';')};const rows=[XL_HEAD];
   (solo||s.items||[]).forEach(it=>rows.push([asNum(it.codigo),it.desc,it.um,fmt(it.cantidad),it.obs||null,asNum(it.reserva),asNum(it.posicion),(EST_SAP.includes(it.estado||'')?null:it.estado)||null,h.proyecto,h.sistema,asNum(h.grafo),asNum(h.pos),e.nombre||h.empresaTxt||'',e.correo1||'',e.correo2||'',e.correo3||'',h.consideraciones||'',new Date(s.fechaSolicitud),s.fechaCarga||dmy(new Date()),h.nombreActividad||'']));
   const ws=XLSX.utils.aoa_to_sheet(rows,{cellDates:true});for(let r=2;r<=rows.length;r++){const c=ws['R'+r];if(c)c.z='yyyy-mm-dd hh:mm:ss'}
   ws['!cols']=XL_HEAD.map((x,i)=>({wch:[10,36,8,9,14,11,8,8,16,14,10,5,12,26,28,28,40,19,11,34][i]}));
@@ -1145,12 +1165,13 @@ const ACT={
     const fotos={};let k=0;for(const id of fotoIds){const sn=await S.db.doc('fotos/'+id).get().catch(()=>null);if(sn&&sn.exists)fotos[id]=sn.data().data;k++;S.resProg=`Leyendo fotos ${k}/${fotoIds.size}…`;schedule()}
     const usuarios=S.cuentas.map(c=>{const cr=S.creds[c.id]||{},kv=claveDe(c.id);return {usuario:c.id,nombre:c.nombre,rol:c.rol,empresaId:c.empresaId||'',activo:c.activo!==false,correo1:cr.correo1||'',correo2:cr.correo2||'',correo3:cr.correo3||'',clave:kv?kv.clave:''}});
     const strip=l=>l.map(x=>{const o=clone(x);return o});
-    const data={formato:'pedidos-material-tasa',version:1,fecha:nowISO(),usuarios,roles:clone(rolesList()),config:{plantillas:clone(S.plantillas||null),periodos:clone(S.periodos||null),cargos:clone(S.cargos||null),unidades:clone(S.unidades||null)},
+    const data={formato:'pedidos-material-tasa',version:1,fecha:nowISO(),usuarios,roles:clone(rolesList()),config:{plantillas:clone(S.plantillas||null),periodos:clone(S.periodos||null),cargos:clone(S.cargos||null),unidades:clone(S.unidades||null),diseno:clone(S.diseno||null)},
       materiales:strip(S.materiales),embarcaciones:strip(S.embarcaciones),empresas:strip(S.empresas),solicitudes:strip(S.solicitudes),plantillasSol:strip(S.plantSol),notificaciones:strip(S.notifs),fotos};
     const ok=await saveFile('respaldo_pedidos_tasa_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(data));
     S.resProg=ok?`Respaldo descargado: ${usuarios.length} usuarios, ${data.materiales.length} materiales, ${data.solicitudes.length} solicitudes, ${Object.keys(fotos).length} fotos.`:'';render()},
   async exportarPost(){const d=S.draft;const pend=(d.items||[]).filter(i=>!i.reserva&&!sigueBloq(i));if(!pend.length||!window.XLSX)return;
     const ok=await saveFile(nombreArchivo(d).replace('.xlsx','_carga-posterior.xlsx'),buildXL(d,pend));if(ok){hist(d,`Generó Excel de carga posterior (${pend.length} ítems)`);await saveDraft(null,true);toast('Excel de carga posterior generado')}},
+  async disOK(){const L=uniq(splitMails(S.disEd??''));if(!L.length){toast('Ingrese al menos un correo válido.','bad');return}await setDoc('config/diseno',{list:L});S.disEd=null;render();toast(`${L.length} correo(s) de diseño guardados`)},
   umAdd(){S.umEd.push({u:'',d:''});render()},
   umDel(el){S.umEd.splice(+el.dataset.i,1);render()},
   async umOK(){const L=[];const seen=new Set();for(const x of S.umEd){const u=umNorm(x.u);if(!u||seen.has(u))continue;seen.add(u);L.push({u,d:String(x.d||'').trim()})}
@@ -1210,7 +1231,7 @@ const ACT={
     await setDoc('claves/'+S.uid,{porUsuario:pu}).catch(()=>{});
     await setDoc('sesiones/'+S.uid,{usuario:c.id,tag:hash.slice(0,16),t:nowISO()});S.loggingIn=null;S.mc=null;render();toast('Contraseña cambiada')},
   /* ---- Usuarios ---- */
-  gTab(el){S.gTab=el.dataset.t;S.rolesEd=null;S.perEd=null;S.carEd=null;S.umEd=null;render()},
+  gTab(el){S.gTab=el.dataset.t;S.rolesEd=null;S.perEd=null;S.carEd=null;S.umEd=null;S.disEd=null;render()},
   verPw(el){S.verPw=S.verPw||{};S.verPw[el.dataset.id]=!S.verPw[el.dataset.id];render()},
   userModal(el){const c=el.dataset.id&&S.cuentas.find(x=>x.id===el.dataset.id);const cr=c&&S.creds[c.id]||{};
     S.modal={t:'user',isNew:!c,pw:c?'':genPw(),v:c?{id:c.id,nombre:c.nombre||'',rol:c.rol,empresaId:c.empresaId||'',activo:c.activo===false?'0':'1',correo1:cr.correo1||'',correo2:cr.correo2||'',correo3:cr.correo3||''}:{id:'',nombre:'',rol:'solicitante',empresaId:'',activo:'1',correo1:'',correo2:'',correo3:''}};render()},
@@ -1370,7 +1391,7 @@ function subscribeFB(){const db=FB.raw;const t=setTimeout(()=>{S.stale=true;rend
   col('cuentas','cuentas',l=>{S.cuentas=l;const m={};l.forEach(c=>m[c.id]=c);S.creds=m});
   col('rolesCfg','rolesCfg',l=>{S.rolesCfg=l.sort((a,b)=>(a.orden??99)-(b.orden??99)).map(r=>({id:r.id,nombre:r.nombre,permisos:r.permisos||[]}))});
   if(S.me&&S.me.rol==='admin')col('claves','claves');
-  ['plantillas','periodos','cargos','unidades'].forEach(id=>subs.push(db.doc('config/'+id).onSnapshot(sn=>{S[id==='plantillas'?'plantillas':id]=sn.exists?clone(sn.data().list):null;afterData()},()=>{})))}
+  ['plantillas','periodos','cargos','unidades','diseno'].forEach(id=>subs.push(db.doc('config/'+id).onSnapshot(sn=>{S[id==='plantillas'?'plantillas':id]=sn.exists?clone(sn.data().list):null;afterData()},()=>{})))}
 function ensureSolSub(){if(!S.loaded.rolesCfg||!S.loaded.cuentas)return;const c=S.cuentas.find(x=>x.id===S.cuenta);if(!c)return;
   const r=rolBy(c.rol);const todas=c.rol==='admin'||(r&&(r.permisos||[]).includes('ver_todas'));const key=c.rol+'|'+(c.empresaId||'')+'|'+todas;if(key===solKey)return;
   if(S.solUnsub)S.solUnsub.forEach(u=>u());S.solUnsub=[];solKey=key;const db=FB.raw;
@@ -1463,7 +1484,7 @@ async function importar(D){const db=FB.raw;const prog=m=>{S.resProg=m;S.gTab='da
     await db.doc('claves/'+u.usuario).set({usuario:u.usuario,clave:pw,t:nowISO(),por:'admin'});await sleep(150)}
   /* 2. Roles y configuración */
   prog('Roles y configuración…');{const b=db.batch();(D.roles||[]).forEach((r,k)=>b.set(db.doc('rolesCfg/'+r.id),{nombre:r.nombre,permisos:r.id==='admin'?Object.keys(PERMS):(r.permisos||[]),orden:k}));
-    for(const k of ['plantillas','periodos','cargos','unidades'])if(D.config&&D.config[k])b.set(db.doc('config/'+k),{list:D.config[k]});await b.commit()}
+    for(const k of ['plantillas','periodos','cargos','unidades','diseno'])if(D.config&&D.config[k])b.set(db.doc('config/'+k),{list:D.config[k]});await b.commit()}
   /* 3. Catálogo en bloques */
   prog('Catálogo de materiales…');const porChunk={};const refs=[];for(const m of D.materiales||[]){const o=clone(m);const id=o.id;delete o.id;if(o.ref)refs.push([id,o]);else{const c=String(o.codigo||id);(porChunk[chunkOf(c)]=porChunk[chunkOf(c)]||{})[c]=o}}
   for(const [k,items] of Object.entries(porChunk))await db.doc('catalogo/'+k).set({items},{merge:true});
