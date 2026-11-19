@@ -421,7 +421,7 @@ const IC={
 function navItems(){const it=[['inicio','Inicio'],['solicitudes','Solicitudes']];
   if(can('crear'))it.push(['nueva','Nueva'],['plantillas','Plantillas']);it.push(['materiales','Materiales']);
   if(can('editar_emb')||can('ver_todas'))it.push(['embarcaciones','Embarcaciones']);
-  if(can('reserva')||can('validar'))it.push(['bloqueos','Bloqueos']);if(can('formulas'))it.push(['formulas','Fórmulas']);it.push(['mejoras','Mejoras'],['gestion','Gestión']);return it}
+  if(can('reserva')||can('validar'))it.push(['bloqueos','Bloqueos']);else if(can('crear'))it.push(['bloqueos','Pendientes']);if(can('formulas'))it.push(['formulas','Fórmulas']);it.push(['mejoras','Mejoras'],['gestion','Gestión']);return it}
 function render(){
   const a=$('#app');
   if(S.fb?(S.boot!=='ok'||(S.cuenta&&!S.loaded.cuentas)):(S.boot!=='ok'||!S.loaded.cuentas||!S.loaded.creds||S.sesion===undefined)){a.innerHTML='<div class="center card">Conectando…</div>';return}
@@ -505,7 +505,7 @@ function vInicio(){
   const byE=ESTADOS.map(e=>[e,L.filter(s=>s.estado===e).length]);const mx=Math.max(1,...byE.map(x=>x[1]));
   const embs={};S.embarcaciones.forEach(e=>{if(estProy(e)!=='Cerrado'||act.some(s=>norm(s.header.proyecto)===norm(e.nombre)))embs[e.nombre]={n:0,abiertas:0,items:0}});act.forEach(s=>{const k=s.header.proyecto||'(sin embarcación)';embs[k]=embs[k]||{n:0,abiertas:0,items:0};embs[k].n++;embs[k].items+=(s.items||[]).length;if(!['Atendida','Reservada'].includes(s.estado))embs[k].abiertas++});
   const accion=act.filter(s=>{if(can('validar'))return ['Enviada','Validada','Exportada'].includes(s.estado);return ['Borrador','Observada'].includes(s.estado)}).sort((a,b)=>(b.fechaSolicitud||'').localeCompare(a.fechaSolicitud||'')).slice(0,8);
-  return `<div class="head"><h1>Tablero</h1>${perSel()}<div class="sp"></div>${can('validar')?'<button class="btn" data-act="importXL">⬆ Importar Excel recibido</button>':''}${can('crear')?'<button class="btn a" data-act="go" data-v="nueva">+ Nueva solicitud</button>':''}</div>
+  return `${libBanner()}<div class="head"><h1>Tablero</h1>${perSel()}<div class="sp"></div>${can('validar')?'<button class="btn" data-act="importXL">⬆ Importar Excel recibido</button>':''}${can('crear')?'<button class="btn a" data-act="go" data-v="nueva">+ Nueva solicitud</button>':''}</div>
   <div class="kpis">${K.map(([l,n,f,c])=>`<div class="kpi" style="--c:${c}" data-act="kpi" data-f="${f}"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
   <div class="grid g2"><div class="card"><h2>Solicitudes por estado</h2><div class="bars">${byE.map(([e,n])=>`<div class="b"><span>${chip(e)}</span><div class="t"><i style="width:${n/mx*100}%"></i></div><b>${n}</b></div>`).join('')}</div></div>
   <div class="card"><h2>Por embarcación</h2>${Object.keys(embs).length?`<div class="scroll"><table><thead><tr><th>Embarcación</th><th>Proyecto</th><th>Solic.</th><th>Abiertas</th><th>Ítems</th></tr></thead><tbody>${Object.entries(embs).map(([k,v])=>`<tr class="click" data-act="kpiEmb" data-e="${esc(k)}"><td>${esc(k)}</td><td>${embBy(k)?chipP(estProy(embBy(k))):''}</td><td>${v.n}</td><td>${v.abiertas}</td><td>${v.items}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sin solicitudes todavía.</div>'}</div></div>
@@ -545,7 +545,7 @@ function revisar(s){const I=[],h=s.header||{};const pre=['Borrador','Observada']
     I.push({n:L,envio:1,m:P+'falta la Pos. (actividad)'+(h.actividadTentativa?` — tentativa: "${h.actividadTentativa}"`:'')+'.',fix:sug?{k:'setPos',v:sug.pos,l:`Usar Pos ${sug.pos} — ${sug.nombre}`}:null})}
   if(!(s.items||[]).length)I.push({n:'error',m:'La solicitud no tiene materiales.'});
   (s.items||[]).forEach((it,i)=>{const tag=`Ítem ${i+1} (${it.codigo||'REF'} ${String(it.desc||'').slice(0,28)})`;
-    if(!it.codigo){I.push({n:'error',m:`${tag}: material referencial sin código SAP.`,fix:can('editar_mat')?{k:'asignarRef',i,l:'Asignar código'}:null});}
+    if(!it.codigo){I.push({n:pre?'aviso':'error',m:`${tag}: material referencial sin código SAP${pre?' (el planificador le asignará el código)':''}.`,fix:can('editar_mat')?{k:'asignarRef',i,l:'Asignar código'}:null});}
     const m=matBy(it.codigo);
     if(it.codigo&&!m)I.push({n:'aviso',m:`${tag}: el código no está en el catálogo.`,fix:can('editar_mat')?{k:'addMat',i,l:'Agregar al catálogo'}:null});
     if(m&&m.um&&it.um&&m.um!==it.um)I.push({n:'aviso',m:`${tag}: UM "${it.um}" distinta al catálogo (${m.um}).`,fix:{k:'setUm',i,v:m.um,l:'Usar '+m.um}});
@@ -605,7 +605,7 @@ function vDetalle(){const s=S.draft;if(!s)return '<div class="empty">Seleccione 
     <td data-l="Observaciones">${ed?`<input data-b="draft.items.${i}.obs" value="${esc(it.obs)}">`:esc(it.obs)}</td>
     <td data-l="Reserva">${reservaEd?`<input class="mono" style="width:100px" data-b="draft.items.${i}.reserva" value="${esc(it.reserva)}">`:`<span class="mono">${esc(it.reserva||'—')}</span>`}</td>
     <td data-l="Posición">${reservaEd?`<input class="mono" style="width:60px" data-b="draft.items.${i}.posicion" value="${esc(it.posicion)}">`:`<span class="mono">${esc(it.posicion||'—')}</span>`}</td>
-    <td data-l="Estado SAP">${reservaEd&&!['Borrador','Observada'].includes(s.estado)?`<select data-ch="estSap" data-i="${i}" style="min-width:120px">${EST_SAP.map(x=>`<option value="${x}" ${(it.estado||'')===x?'selected':''}>${x||'—'}</option>`).join('')}</select>${isBloq(it)&&it.bloqueo&&it.bloqueo.desde?`<div class="small muted">${diasDesde(it.bloqueo.desde)} día(s)</div>`:''}`:(chipSap(it.estado)||'<span class="muted">—</span>')}</td>
+    <td data-l="Estado SAP">${reservaEd&&!['Borrador','Observada'].includes(s.estado)?`<select data-ch="estSap" data-i="${i}" style="min-width:120px">${EST_SAP.map(x=>`<option value="${x}" ${(it.estado||'')===x?'selected':''}>${labSap(x)||'—'}</option>`).join('')}</select>${isBloq(it)&&it.bloqueo&&it.bloqueo.desde?`<div class="small muted">${diasDesde(it.bloqueo.desde)} día(s)</div>`:''}`:(chipSap(it.estado)||'<span class="muted">—</span>')}</td>
     <td>${ed?`<button class="btn s d" data-act="delItem" data-i="${i}">✕</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Agregue materiales con el buscador. Si no lo encuentra, regístrelo como referencial.</div>'}
    ${ed?'<div class="row" style="margin-top:10px"><button class="btn" data-act="refModal">+ No encuentro el material (referencial)</button><button class="btn" data-act="impLista">⬆ Importar lista (Excel)</button></div>':''}</div>
   </div><div>
@@ -794,6 +794,8 @@ function botVista(v){const c=miCuenta()||{},nom=esc(String(c.nombre||'').split('
   if(v==='solicitudes'){if(enProc)return botHTML(can('validar')?`Estoy procesando <b>${enProc}</b> solicitud(es) activas: revisión, carga y reserva. Abre cualquiera para ver su avance.`:`<b>Tu pedido está siendo atendido.</b> Tienes ${enProc} solicitud(es) en proceso; te muestro aquí cuando tengan reserva y posición.`,{working:true,title:'Pedidos en atención'});
     return botHTML(res?`Tienes <b>${res}</b> pedido(s) con reserva. Ábrelos para copiar la reserva / pos.`:`No hay pedidos en proceso en este momento. ${can('crear')?'Cuando envíes uno, yo lo sigo por ti.':''}`,{mood:'happy',title:'Pedidos en atención'})}
   if(v==='mejoras')return botHTML(`¿Qué le gustaría que la app haga por usted? Cuénteme su idea y el equipo de Diseño la evaluará. Las propuestas con más 👍 se priorizan.`,{mood:'happy',title:'Buzón de mejoras'});
+  if(v==='bloqueos'&&!(can('reserva')||can('validar'))){const sb=bloqueosTodos().length,rp=refsPend().length,nl=libNuevos().length;
+    return botHTML(nl?`🎉 <b>${nl}</b> material(es) ya tienen reserva. Cópielos desde la tabla de liberados.`:(sb||rp)?`Estoy pendiente de <b>${sb}</b> código(s) bloqueado(s) en SAP y <b>${rp}</b> material(es) sin código. Le aviso aquí apenas tengan reserva.`:'No tiene materiales pendientes. ¡Todo con reserva! 🎉',{mood:nl||!(sb||rp)?'happy':'ok',working:!!(sb||rp),title:'Mis pendientes'})}
   if(v==='bloqueos'){const L=bloqueosTodos(),sb=L.filter(x=>sigueBloq(x.it)).length;return botHTML(sb?`Estoy vigilando <b>${sb}</b> código(s) bloqueado(s) en SAP. Cuando se desbloqueen, márquelos como <b>Desbloqueado</b> y yo preparo el Excel de carga posterior.`:(L.length?`Todo desbloqueado: <b>${L.length}</b> ítem(s) esperan la carga posterior.`:'No hay códigos bloqueados. ¡Todo fluye! 🎉'),{mood:sb?'worry':'happy',working:!!sb,title:'Bloqueos SAP'})}
   if(v==='materiales')return botHTML('Busca rápido con comodines: <b>pl*12*</b>, <b>tub* 1/2*</b>. Si no encuentras un material, regístralo como referencial y el planificador le asigna su código.',{title:'Catálogo'});
   if(v==='plantillas')return botHTML('Guarda tus pedidos frecuentes como plantilla y yo los preparo en un clic: solo ajustas las cantidades.',{mood:'happy',title:'Plantillas'});
@@ -821,30 +823,38 @@ function estadoPanel(s){const e=s.estado,pl=can('validar');let idx=PASOS.findInd
 
 
 /* ============ Seguimiento de códigos bloqueados en SAP ============ */
-const EST_SAP=['','Bloqueado','Desbloqueo solicitado','Desbloqueado','Cargado'];
+const EST_SAP=['','Reservado','Bloqueado','Desbloqueo solicitado','Desbloqueado','Cargado'];
 const isBloq=it=>['Bloqueado','Desbloqueo solicitado','Desbloqueado'].includes(it.estado)&&!it.reserva;
 const sigueBloq=it=>['Bloqueado','Desbloqueo solicitado'].includes(it.estado)&&!it.reserva;
 const diasDesde=t=>t?Math.max(0,Math.floor((Date.now()-new Date(t))/864e5)):0;
-function chipSap(e){if(!e)return '';const c={'Bloqueado':'background:#fbdcd8;color:#7d1a10','Desbloqueo solicitado':'background:#fde7bf;color:#6b4300','Desbloqueado':'background:#d6e4fc;color:#123c8f','Cargado':'background:#d3efe4;color:#0b4d3a'}[e]||'';return `<span class="chip" style="${c}">${e==='Bloqueado'?'🔒 ':e==='Desbloqueado'?'🔓 ':''}${esc(e)}</span>`}
+function chipSap(e){if(!e)return '';const c={'Bloqueado':'background:#fbdcd8;color:#7d1a10','Desbloqueo solicitado':'background:#fde7bf;color:#6b4300','Desbloqueado':'background:#d6e4fc;color:#123c8f','Cargado':'background:#d3efe4;color:#0b4d3a','Reservado':'background:#d3efe4;color:#0b4d3a'}[e]||'';return `<span class="chip" style="${c}">${e==='Bloqueado'?'🔒 ':e==='Desbloqueado'?'🔓 ':e==='Reservado'?'✅ ':''}${esc(labSap(e))}</span>`}
 function bloqueosTodos(){const out=[];visibles(false).forEach(s=>{if(s.estado==='Anulada')return;(s.items||[]).forEach((it,i)=>{if(isBloq(it))out.push({s,it,i})})});return out}
 function setEstSap(it,v){it.bloqueo=it.bloqueo||{};const now=nowISO();it.estado=v;
   if(v==='Bloqueado'&&!it.bloqueo.desde)it.bloqueo.desde=now;if(v==='Desbloqueo solicitado'){it.bloqueo.desde=it.bloqueo.desde||now;it.bloqueo.solicitado=now}
-  if(v==='Desbloqueado'){it.bloqueo.desde=it.bloqueo.desde||now;it.bloqueo.desbloqueado=now}if(v==='Cargado')it.bloqueo.cargado=now}
+  if(v==='Desbloqueado'){it.bloqueo.desde=it.bloqueo.desde||now;it.bloqueo.desbloqueado=now}if(v==='Cargado'||v==='Reservado')it.bloqueo.cargado=now}
 async function marcarCatalogo(code,v){if(!can('editar_mat'))return;const m=matBy(code);if(!m)return;const b=clone(m);delete b.id;
   if(['Bloqueado','Desbloqueo solicitado'].includes(v))b.sapBloq={estado:v,desde:(m.sapBloq&&m.sapBloq.desde)||nowISO()};else if(m.sapBloq)b.sapBloq=null;else return;
   await setDoc('materiales/'+m.id,b).catch(()=>{})}
-function vBloqueos(){const f=S.bqF||'';let L=bloqueosTodos();if(f)L=L.filter(x=>x.it.estado===f);L.sort((a,b)=>String((a.it.bloqueo||{}).desde||'').localeCompare(String((b.it.bloqueo||{}).desde||'')));
+function vBloqueos(){const ed=can('reserva')||can('validar');const f=S.bqF||'';let L=bloqueosTodos();if(f)L=L.filter(x=>x.it.estado===f);L.sort((a,b)=>String((a.it.bloqueo||{}).desde||'').localeCompare(String((b.it.bloqueo||{}).desde||'')));
   const porCod={};bloqueosTodos().filter(x=>sigueBloq(x.it)).forEach(x=>{const k=x.it.codigo;porCod[k]=porCod[k]||{desc:x.it.desc,n:0,dias:0};porCod[k].n++;porCod[k].dias=Math.max(porCod[k].dias,diasDesde((x.it.bloqueo||{}).desde))});
-  const ed=can('reserva')||can('validar');const listos=bloqueosTodos().filter(x=>x.it.estado==='Desbloqueado');
-  return `<div class="head"><h1>Seguimiento de bloqueos SAP</h1><select style="width:auto" data-b="bqF" data-rr="1"><option value="">Todos los pendientes</option>${EST_SAP.slice(1,4).map(e=>`<option ${f===e?'selected':''}>${e}</option>`).join('')}</select><div class="sp"></div></div>
-  ${Object.keys(porCod).length?`<div class="card"><h2>Códigos bloqueados (${Object.keys(porCod).length})</h2><div class="row">${Object.entries(porCod).sort((a,b)=>b[1].dias-a[1].dias).map(([k,v])=>`<span class="chip" style="background:${v.dias>3?'#fbdcd8;color:#7d1a10':'#fde7bf;color:#6b4300'};font-weight:600" title="${esc(v.desc)}">🔒 ${esc(k)} · ${v.n} solicitud(es) · ${v.dias} día(s)</span>`).join('')}</div></div>`:''}
-  ${listos.length?`<div class="okbox" style="margin-bottom:12px">🔓 <b>${listos.length}</b> ítem(s) ya desbloqueados esperan la <b>carga posterior</b>. Abra cada solicitud y use “⬇ Excel carga posterior”.</div>`:''}
-  <div class="card">${L.length?`<div class="scroll"><table class="rs"><thead><tr><th>Días</th><th>Código</th><th>Descripción</th><th>Embarcación / Pos.</th><th>Empresa</th><th>Estado SAP</th><th>Nota / ticket</th><th></th></tr></thead><tbody>${L.map(({s,it,i})=>{const d=diasDesde((it.bloqueo||{}).desde),e=empBy(s.empresaId);
+  const R=refsPend(),LB=liberados().slice(0,30);const RI=S.resIn||(S.resIn={});
+  const fila=({s,it,i})=>{const d=diasDesde((it.bloqueo||{}).desde),e=empBy(s.empresaId),k=s.id+'_'+i,ri=RI[k]||(RI[k]={r:'',p:''});
     return `<tr><td data-l="Días"><b style="color:${d>3&&sigueBloq(it)?'var(--bad)':'inherit'}">${d}</b></td><td data-l="Código" class="mono">${esc(it.codigo)}</td><td data-l="Descripción">${esc(it.desc)}<div class="small muted">${esc(it.cantidad)} ${esc(it.um)}</div></td>
-    <td data-l="Embarcación">${esc(s.header.proyecto||'—')}<div class="small muted">${esc(s.header.sistema||'')} · Pos ${esc(s.header.pos||'—')}</div></td><td data-l="Empresa">${esc(e?e.nombre:(s.header.empresaTxt||'—'))}</td>
-    <td data-l="Estado SAP">${ed?`<select data-ch="estSapL" data-sid="${esc(s.id)}" data-i="${i}">${EST_SAP.slice(1,4).map(x=>`<option ${it.estado===x?'selected':''}>${x}</option>`).join('')}</select>`:chipSap(it.estado)}</td>
-    <td data-l="Nota">${ed?`<input data-ch="notaBloq" data-sid="${esc(s.id)}" data-i="${i}" value="${esc((it.bloqueo||{}).nota||'')}" placeholder="Ej. ticket SAP 1234">`:esc((it.bloqueo||{}).nota||'')}</td>
-    <td><button class="btn s" data-act="open" data-id="${esc(s.id)}">Abrir</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No hay códigos bloqueados pendientes. 👍</div>'}</div>`}
+    <td data-l="Embarcación">${esc(s.header.proyecto||'—')}<div class="small muted">${esc(s.header.sistema||'')} · Pos ${esc(s.header.pos||'—')}</div></td>${ed?`<td data-l="Empresa">${esc(e?e.nombre:(s.header.empresaTxt||'—'))}</td>`:''}
+    <td data-l="Estado SAP">${ed?`<select data-ch="estSapL" data-sid="${esc(s.id)}" data-i="${i}">${['Bloqueado','Desbloqueo solicitado','Desbloqueado'].map(x=>`<option value="${x}" ${it.estado===x?'selected':''}>${labSap(x)}</option>`).join('')}</select>`:chipSap(it.estado)}${(it.bloqueo||{}).solicitado?`<div class="small muted">Enviada ${esc(fdt(it.bloqueo.solicitado))}</div>`:''}</td>
+    <td data-l="Nota">${ed?`<input data-ch="notaBloq" data-sid="${esc(s.id)}" data-i="${i}" value="${esc((it.bloqueo||{}).nota||'')}" placeholder="Ej. ticket SAP 1234">`:esc((it.bloqueo||{}).nota||'—')}</td>
+    ${ed?`<td data-l="Reserva / Pos."><div class="row" style="flex-wrap:nowrap"><input class="mono" style="width:100px" placeholder="Reserva" data-b="resIn.${k}.r" value="${esc(ri.r)}"><input class="mono" style="width:56px" placeholder="Pos" data-b="resIn.${k}.p" value="${esc(ri.p)}"><button class="btn s p" data-act="cargarRes" data-sid="${esc(s.id)}" data-i="${i}" title="Registrar la reserva de este código desbloqueado">Cargar</button></div></td>`:''}
+    <td><button class="btn s" data-act="open" data-id="${esc(s.id)}">Abrir</button></td></tr>`};
+  return `<div class="head"><h1>${ed?'Seguimiento de bloqueos SAP':'Mis materiales pendientes'}</h1><select style="width:auto" data-b="bqF" data-rr="1"><option value="">Todos los bloqueados</option>${['Bloqueado','Desbloqueo solicitado','Desbloqueado'].map(e=>`<option value="${e}" ${f===e?'selected':''}>${labSap(e)}</option>`).join('')}</select><div class="sp"></div></div>
+  ${libBanner()}
+  ${Object.keys(porCod).length?`<div class="card"><h2>Códigos bloqueados (${Object.keys(porCod).length})</h2><div class="row">${Object.entries(porCod).sort((a,b)=>b[1].dias-a[1].dias).map(([k,v])=>`<span class="chip" style="background:${v.dias>3?'#fbdcd8;color:#7d1a10':'#fde7bf;color:#6b4300'};font-weight:600" title="${esc(v.desc)}">🔒 ${esc(k)} · ${v.n} solicitud(es) · ${v.dias} día(s)</span>`).join('')}</div></div>`:''}
+  <div class="card"><h2>🔒 Bloqueados en SAP (${L.length})</h2>${ed?'<p class="small muted" style="margin-top:-6px">Marque <b>Solicitud de desbloqueo enviada</b> cuando pida el desbloqueo. Cuando el código ya esté desbloqueado y cargado, escriba su <b>reserva y posición</b> y pulse <b>Cargar</b>: la contrata lo verá al instante.</p>':'<p class="small muted" style="margin-top:-6px">Estos materiales están bloqueados en SAP. Diseño gestiona su desbloqueo; cuando tengan reserva le avisaremos aquí.</p>'}
+   ${L.length?`<div class="scroll"><table class="rs"><thead><tr><th>Días</th><th>Código</th><th>Descripción</th><th>Embarcación / Pos.</th>${ed?'<th>Empresa</th>':''}<th>Estado</th><th>Nota / ticket</th>${ed?'<th>Reserva / Pos.</th>':''}<th></th></tr></thead><tbody>${L.map(fila).join('')}</tbody></table></div>`:'<div class="empty">No hay códigos bloqueados pendientes. 👍</div>'}</div>
+  <div class="card"><h2>❔ Materiales sin código SAP (${R.length})</h2><p class="small muted" style="margin-top:-6px">${ed?'Asigne el código en Materiales → Referenciales pendientes (o desde la solicitud).':'Materiales que pidió sin código: Diseño les asigna el código y luego la reserva.'}</p>
+   ${R.length?`<div class="scroll"><table class="rs"><thead><tr><th>Material</th><th>Embarcación / Pos.</th><th>Estado</th><th></th></tr></thead><tbody>${R.map(({s,it})=>`<tr><td data-l="Material">${esc(it.desc)}<div class="small muted">${esc(it.cantidad)} ${esc(it.um)}</div></td><td data-l="Embarcación">${esc(s.header.proyecto||'—')} · Pos ${esc(s.header.pos||'—')}</td>
+    <td data-l="Estado">${it.codigo?`<span class="chip e-Validada">Código asignado: <span class="mono">${esc(it.codigo)}</span></span> <span class="small muted">· esperando reserva</span>`:'<span class="chip ref">Pendiente de código</span>'}</td>
+    <td><div class="row" style="flex-wrap:nowrap">${ed&&!it.codigo?`<button class="btn s p" data-act="asignarRefMat" data-id="${esc(it.refId)}">Asignar código</button>`:''}<button class="btn s" data-act="open" data-id="${esc(s.id)}">Abrir</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No hay materiales sin código pendientes.</div>'}</div>
+  <div class="card"><h2>🎉 Liberados con reserva</h2>${LB.length?`<div class="scroll"><table class="rs"><thead><tr><th>Fecha</th><th>Código</th><th>Descripción</th><th>Embarcación / Pos.</th><th>Reserva</th><th>Posición</th><th></th></tr></thead><tbody>${LB.map(({s,it})=>`<tr><td data-l="Fecha">${esc(fdt(it.liberadoEn))}</td><td data-l="Código" class="mono">${esc(it.codigo)}</td><td data-l="Descripción">${esc(it.desc)}</td><td data-l="Embarcación">${esc(s.header.proyecto||'—')} · Pos ${esc(s.header.pos||'—')}</td><td data-l="Reserva" class="mono"><b>${esc(it.reserva)}</b></td><td data-l="Posición" class="mono"><b>${esc(it.posicion)}</b></td><td><button class="btn s" data-act="copiar" data-txt="${esc(it.reserva+'\t'+it.posicion)}">📋 Copiar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Aún no hay materiales liberados.</div>'}</div>`}
 async function guardarItemSol(sid,i,fn,msg){const s=S.solicitudes.find(x=>x.id===sid);if(!s)return;const c=clone(s);fn(c.items[i],c);if(msg)hist(c,msg);c.updatedAt=nowISO();
   if(c.items.every(x=>x.reserva||isBloq(x))&&c.items.some(x=>x.reserva)&&['Validada','Exportada'].includes(c.estado))c.estado='Reservada';
   const b=clone(c);delete b.id;await setDoc('solicitudes/'+sid,b);if(S.draft&&S.draft.id===sid&&!S.dirty){S.draft=clone(c)}}
@@ -891,8 +901,9 @@ function mImpLista(M){const R=M.rows||[];const n=R.filter(r=>r.usar).length,nref
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="impListaOK" ${n?'':'disabled'}>Agregar ${n} material(es)</button></div>`}
 
 /* ============ Novedades de versión ============ */
-const APP_VERSION='1.7';
+const APP_VERSION='1.8';
 const CHANGELOG=[
+ {v:'1.8',f:'2026-11-19',t:'Estados SAP y pendientes de la contrata',items:['✅ El Excel devuelto por el script actualiza cada material como <b>Reservado</b> o <b>Bloqueado</b>.','🔓 En Bloqueos: marque <b>Solicitud de desbloqueo enviada</b> y, cuando el código esté desbloqueado, cargue su <b>reserva y posición</b> ahí mismo.','📋 Las contratas ven en <b>Pendientes</b> sus códigos bloqueados, sus materiales sin código y una alerta 🎉 cuando ya tienen reserva.']},
  {v:'1.7',f:'2026-11-19',t:'Buzón de mejoras y novedades',items:['💡 Nuevo <b>Buzón de mejoras</b>: proponga funciones, reporte errores y vote 👍 las ideas de otros usuarios.','📣 Esta ventana de <b>novedades</b> le avisará cada vez que la app tenga funciones nuevas.']},
  {v:'1.6',f:'2026-11-19',t:'Unidades, listas y correos',items:['📏 Más unidades de medida (PZA, KIT, M3, TON, BAR…) y el administrador puede agregar nuevas.','⬆ <b>Importar lista</b>: suba su Excel o pegue filas copiadas y la app busca cada material en el catálogo.','✉ Correos de la solicitud: Correo 1 contrata, Correo 2 responsables y Correo 3 diseño. La alerta va PARA diseño con CC a responsables.']},
  {v:'1.5',f:'2026-11-18',t:'Seguimiento de bloqueos SAP',items:['🔒 Seguimiento de códigos bloqueados en SAP hasta su desbloqueo y Excel de carga posterior.','📱 Diseño adaptado a celulares e indicador de conexión 🟢.']},
@@ -944,10 +955,26 @@ function vMejoras(){const adm=can('usuarios');const F=S.mejF||{q:'',est:'',mias:
     </div></div></div>`}).join(''):'<div class="card empty">Aún no hay propuestas con estos filtros. ¡Sea el primero en sugerir una mejora!</div>'}</div></div>`}
 function mMejResp(M){return `<h2>Responder propuesta</h2><p class="small"><b>${esc(M.m.titulo)}</b></p><textarea rows="5" data-b="modal.txt" placeholder="Ej. ¡Gracias! Lo incluiremos en la próxima versión.">${esc(M.txt)}</textarea>
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="mejRespOK">Guardar respuesta</button></div>`}
+
+/* ============ Estados SAP (v1.8): Reservado / Bloqueado, pendientes de la contrata ============ */
+const labSap=v=>v==='Desbloqueo solicitado'?'Solicitud de desbloqueo enviada':v;
+function refsPend(){const out=[];visibles(false).forEach(s=>{if(s.estado==='Anulada')return;(s.items||[]).forEach((it,i)=>{if(it.refId&&!it.reserva)out.push({s,it,i})})});return out}
+function liberados(){const out=[];visibles(false).forEach(s=>(s.items||[]).forEach((it,i)=>{if(it.liberadoEn&&it.reserva)out.push({s,it,i})}));return out.sort((a,b)=>String(b.it.liberadoEn).localeCompare(String(a.it.liberadoEn)))}
+function libVisto(){try{return localStorage.getItem('pm_lib_'+S.cuenta)||''}catch(e){return ''}}
+function libNuevos(){const v=libVisto();return liberados().filter(x=>String(x.it.liberadoEn)>v)}
+function libBanner(){if(can('reserva')||can('validar'))return '';const L=libNuevos();if(!L.length)return '';
+  return `<div class="okbox" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px">🎉 <span><b>${L.length}</b> material(es) que estaban bloqueados o sin código <b>ya tienen reserva</b>: ${L.slice(0,4).map(x=>`<span class="mono">${esc(x.it.codigo)}</span> → <b class="mono">${esc(x.it.reserva)}/${esc(x.it.posicion)}</b>`).join(' · ')}${L.length>4?' …':''}</span><div style="flex:1"></div><button class="btn s" data-act="go" data-v="bloqueos">Ver</button><button class="btn s" data-act="libVisto">Entendido</button></div>`}
+function mAvisoRes(M){const C=correosSol(M.s);const h=M.s.header;const lineas=M.items.map(it=>`- ${it.codigo} ${it.desc} — ${it.cantidad} ${it.um}: Reserva ${it.reserva} / Pos. ${it.posicion}`).join('\n');
+  const n={para:C.c1,cc:C.c2,asunto:`Reserva disponible — ${h.proyecto||''} / Pos. ${h.pos||''} — ${M.items.length} material(es) liberado(s)`,cuerpo:`Estimados:\n\nLos siguientes materiales que estaban bloqueados (o sin código) ya cuentan con reserva:\n\n${lineas}\n\nEmbarcación: ${h.proyecto||'—'} · Sistema: ${h.sistema||'—'} · Grafo ${h.grafo||'—'} · Pos. ${h.pos||'—'}\nActividad: ${h.nombreActividad||'—'}\n\nPuede copiar la reserva / pos desde la app de Pedidos de Material.\n\nSaludos,\nJefatura de Diseño — Astillero TASA`};
+  return `<h2>✉ Avisar a la contrata</h2><p class="small muted" style="margin-top:-8px">La contrata ya ve la reserva en su app. Si desea, avísele también por correo.</p>
+  <label>Para · Contrata</label><div class="mono small" style="margin-bottom:6px;word-break:break-all">${n.para.map(esc).join('; ')||'— sin correos —'}</div>
+  <label>CC · Responsables</label><div class="mono small" style="margin-bottom:6px;word-break:break-all">${n.cc.map(esc).join('; ')||'—'}</div>
+  <label>Mensaje</label><textarea rows="8" readonly>${esc(n.asunto+'\n\n'+n.cuerpo)}</textarea>
+  <div class="mfoot" style="justify-content:flex-start">${n.para.length?`<a class="btn a" href="${esc(mailtoDe(n))}" target="_blank" rel="noopener">✉ Abrir en mi correo</a>`:''}<button class="btn" data-act="copiar" data-txt="${esc(n.asunto+'\n\n'+n.cuerpo)}">Copiar mensaje</button><div style="flex:1"></div><button class="btn" data-act="closeM">Cerrar</button></div>`}
 /* ============ Modales ============ */
 function modalHTML(){const M=S.modal;let body='';
   if(M.t==='calc')body=mCalc(M);else if(M.t==='ref')body=mRef(M);else if(M.t==='mat')body=mMat(M);else if(M.t==='emb')body=mEmb(M);
-  else if(M.t==='reserva')body=mReserva(M);else if(M.t==='obs')body=mObs(M);else if(M.t==='emp')body=mEmp(M);else if(M.t==='user')body=mUser(M);else if(M.t==='plantSave')body=mPlantSave(M);else if(M.t==='plantEdit')body=mPlantEdit(M);else if(M.t==='nuevaDesde')body=mNuevaDesde(M);else if(M.t==='alerta')body=mAlerta(M);else if(M.t==='impLista')body=mImpLista(M);else if(M.t==='novedades')body=mNovedades(M);else if(M.t==='mejResp')body=mMejResp(M);else if(M.t==='tpl')body=mTpl(M);
+  else if(M.t==='reserva')body=mReserva(M);else if(M.t==='obs')body=mObs(M);else if(M.t==='emp')body=mEmp(M);else if(M.t==='user')body=mUser(M);else if(M.t==='plantSave')body=mPlantSave(M);else if(M.t==='plantEdit')body=mPlantEdit(M);else if(M.t==='nuevaDesde')body=mNuevaDesde(M);else if(M.t==='alerta')body=mAlerta(M);else if(M.t==='impLista')body=mImpLista(M);else if(M.t==='novedades')body=mNovedades(M);else if(M.t==='mejResp')body=mMejResp(M);else if(M.t==='avisoRes')body=mAvisoRes(M);else if(M.t==='tpl')body=mTpl(M);
   else if(M.t==='foto')body=`<h2>Foto referencial</h2>${M.src?`<img src="${esc(M.src)}" style="max-width:100%;border-radius:8px">`:'Cargando…'}<div class="mfoot"><button class="btn" data-act="closeM">Cerrar</button></div>`;
   else if(M.t==='asignar')body=mAsignar(M);else if(M.t==='confirm')body=`<h2>${esc(M.title)}</h2><p>${esc(M.msg)}</p><div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn ${M.danger?'d':'p'}" data-act="confirmOK">${esc(M.ok||'Aceptar')}</button></div>`;
   else if(M.t==='info')body=`<h2>${esc(M.title)}</h2><div>${M.html}</div><div class="mfoot"><button class="btn p" data-act="closeM">Entendido</button></div>`;
@@ -1167,7 +1194,7 @@ const ACT={
   reservaModal(){S.modal={t:'reserva',tab:'man',reserva:resumenReserva(S.draft).split(',')[0]||'',ini:'1',inc:'1',soloVacias:false};render()},
   resTab(el){S.modal.tab=el.dataset.t;render()},
   async resOK(){const M=S.modal,d=S.draft;if(!M.reserva.trim()){toast('Ingrese la reserva.','bad');return}let p=num(M.ini)||1;const inc=num(M.inc)||1;
-    d.items.forEach(it=>{if(M.soloVacias&&it.reserva)return;if(sigueBloq(it))return;if(it.estado==='Desbloqueado'&&!it.reserva)setEstSap(it,'Cargado');it.reserva=M.reserva.trim();it.posicion=String(p);p+=inc});
+    d.items.forEach(it=>{if(M.soloVacias&&it.reserva)return;if(sigueBloq(it))return;if(!it.reserva&&((it.bloqueo&&it.bloqueo.desde)||it.refId))it.liberadoEn=nowISO();if(isBloq(it))setEstSap(it,'Reservado');else if(!it.estado)it.estado='Reservado';it.reserva=M.reserva.trim();it.posicion=String(p);p+=inc});
     if(d.items.every(i=>i.reserva||isBloq(i))&&['Validada','Exportada'].includes(d.estado))d.estado='Reservada';S.modal=null;await saveDraft('Registró reserva '+M.reserva.trim());toast('Reserva registrada')},
   duplicar(){const s=clone(S.draft);s.id=newId('solicitudes');s.estado='Borrador';s.fechaSolicitud=nowISO();s.createdBy=S.cuenta;s.historial=[];delete s.fechaCarga;delete s.origen;s.items.forEach(i=>{i.reserva='';i.posicion='';i.estado=''});hist(s,'Duplicó una solicitud');S.draft=s;S.sel=s.id;S.isNew=true;S.dirty=true;render()},
   anular(){S.modal={t:'confirm',title:'Anular solicitud',msg:'La solicitud quedará anulada. ¿Continuar?',ok:'Anular',danger:true,fn:async()=>{S.draft.estado='Anulada';await saveDraft('Anuló la solicitud')}};render()},
@@ -1260,6 +1287,12 @@ const ACT={
   mejDel(el){const m=S.mejoras.find(x=>x.id===el.dataset.id);S.modal={t:'confirm',title:'Eliminar propuesta',msg:`¿Eliminar "${m.titulo}"?`,ok:'Eliminar',danger:true,fn:async()=>{await delDoc('mejoras/'+m.id);toast('Propuesta eliminada')}};render()},
   async mejExport(){if(!window.XLSX)return;const rows=[['Fecha','Título','Tipo','Importancia','Descripción','Propuesto por','Empresa','Votos','Estado','Respuesta']].concat(S.mejoras.map(m=>[fdt(m.fecha),m.titulo,m.tipo,m.importancia,m.descripcion,nameOf(m.por),((empBy((S.cuentas.find(c=>c.id===m.por)||{}).empresaId||m.empresaId))||{}).nombre||'',(m.votos||[]).length,m.estado,m.respuesta||'']));
     const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:16},{wch:40},{wch:14},{wch:10},{wch:60},{wch:22},{wch:18},{wch:7},{wch:14},{wch:40}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Mejoras');await saveFile('buzon_mejoras_'+new Date().toISOString().slice(0,10)+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}))},
+  libVisto(){try{localStorage.setItem('pm_lib_'+S.cuenta,nowISO())}catch(e){}render()},
+  async cargarRes(el){const sid=el.dataset.sid,i=+el.dataset.i,k=sid+'_'+i,ri=(S.resIn||{})[k]||{};const r=String(ri.r||'').trim(),p=String(ri.p||'').trim();
+    if(!r||!p){toast('Escriba la reserva y la posición.','bad');return}const s0=S.solicitudes.find(x=>x.id===sid);const code=s0?s0.items[i].codigo:'';
+    await guardarItemSol(sid,i,it=>{it.reserva=r;it.posicion=p;it.liberadoEn=nowISO();setEstSap(it,'Reservado')},`Código ${code} desbloqueado: reserva ${r} / pos ${p}`);
+    marcarCatalogo(code,'');delete S.resIn[k];toast(`${code}: reserva ${r}/${p} registrada`);
+    const s1=S.solicitudes.find(x=>x.id===sid)||s0;const it=clone(s1.items[i]);it.reserva=r;it.posicion=p;S.modal={t:'avisoRes',s:clone(s1),items:[it]};render()},
   async copiarRes(){const s=S.draft;const txt=(s.items||[]).map(i=>(i.reserva||'')+'\t'+(i.posicion||'')).join('\n');
     try{await navigator.clipboard.writeText(txt);toast('Copiado: péguelo en Excel o en su sistema')}catch(e){S.modal={t:'info',title:'Reservas y posiciones',html:`<p class="small">Seleccione todo y copie (Ctrl+C):</p><textarea rows="12" readonly>${esc(txt)}</textarea>`};render()}},
   async xlRes(){if(!window.XLSX)return;await saveFile(nombreArchivo(S.draft),buildXL(S.draft))},
@@ -1384,10 +1417,14 @@ const CH={
   tplConsts(el){S.modal.v.consts=parseConsts(el.value);render()},
   rolPerm(el){const r=S.rolesEd[+el.dataset.i],p=el.dataset.p;r.permisos=el.checked?[...new Set([...(r.permisos||[]),p])]:(r.permisos||[]).filter(x=>x!==p)},
   async embEstado(el){const e=S.embarcaciones.find(x=>x.id===el.dataset.id);const b=clone(e);delete b.id;b.estado=el.value;await setDoc('embarcaciones/'+e.id,b);toast(`${e.nombre}: proyecto ${el.value.toLowerCase()}`)},
-  async resXL(el){const f=el.files[0];if(!f)return;let rows;try{rows=await readXL(f)}catch(e){toast(e.message,'bad');return}const d=S.draft;let n=0;const used=new Set();
-    rows.forEach(r=>{const c=String(cell(r.codigo)),res=String(cell(r.reserva)),p=String(cell(r.posicion));if(!c||!res)return;const i=d.items.findIndex((it,ix)=>!used.has(ix)&&String(it.codigo)===c);if(i<0)return;used.add(i);const it=d.items[i];if(it.estado==='Desbloqueado'&&!it.reserva)setEstSap(it,'Cargado');it.reserva=res;it.posicion=p;if(r.estado)it.estado=String(cell(r.estado));n++});
-    rows.forEach(r=>{const c=String(cell(r.codigo)),res=String(cell(r.reserva));if(!c||res||!/bloq/i.test(String(r.estado||'')))return;const it=d.items.find(x=>String(x.codigo)===c&&!x.reserva);if(it&&!isBloq(it)){setEstSap(it,'Bloqueado');marcarCatalogo(c,'Bloqueado')}});
-    if(d.items.every(i=>i.reserva||isBloq(i))&&['Validada','Exportada'].includes(d.estado))d.estado='Reservada';S.modal.msg=`${n} de ${d.items.length} ítems actualizados.`;await saveDraft(`Actualizó reserva desde ${f.name} (${n} ítems)`);S.modal&&render()},
+  async resXL(el){const f=el.files[0];if(!f)return;let rows;try{rows=await readXL(f)}catch(e){toast(e.message,'bad');return}const d=S.draft;let nR=0,nB=0;const used=new Set();const now=nowISO();
+    rows.forEach(r=>{const c=String(cell(r.codigo)).trim(),res=String(cell(r.reserva)).trim(),p=String(cell(r.posicion)).trim(),est=String(cell(r.estado)).trim();if(!c)return;
+      const bq=/bloq/i.test(est);const i=d.items.findIndex((it,ix)=>!used.has(ix)&&String(it.codigo)===c&&(bq?!it.reserva:true));if(i<0)return;used.add(i);const it=d.items[i];
+      if(bq){if(!isBloq(it)){setEstSap(it,'Bloqueado');marcarCatalogo(c,'Bloqueado')}nB++;return}
+      if(!res)return;if((it.bloqueo&&it.bloqueo.desde)||it.refId)it.liberadoEn=now;if(isBloq(it)){setEstSap(it,'Reservado');marcarCatalogo(c,'')}
+      it.reserva=res;it.posicion=p;it.estado=/reserv/i.test(est)||!est?'Reservado':est;nR++});
+    if(d.items.every(i=>i.reserva||isBloq(i))&&d.items.some(i=>i.reserva)&&['Validada','Exportada'].includes(d.estado))d.estado='Reservada';
+    S.modal.msg=`${nR} ítem(s) con reserva${nB?` · ${nB} bloqueado(s) en SAP (quedan en seguimiento)`:''} · ${d.items.length-nR-nB} sin cambios.`;await saveDraft(`Actualizó reserva desde ${f.name} (${nR} reservados, ${nB} bloqueados)`);S.modal&&render()},
 };
 /* ============ Eventos ============ */
 document.addEventListener('click',ev=>{const el=ev.target.closest('[data-act]');if(!el)return;
