@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">
 <title>Pedidos de Material — Astillero TASA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -500,7 +501,7 @@ function vInicio(){
   const issuesOf=s=>revisar(s);
   const sinGP=act.filter(s=>['Enviada','Borrador','Observada'].includes(s.estado)&&(!s.header.grafo||!s.header.pos)).length;
   const refsP=S.materiales.filter(m=>m.ref&&m.estadoRef==='pendiente').length;
-  const cnt=e=>act.filter(s=>estadoEf(s)===e).length;const parcial=act.filter(s=>EN_CURSO.includes(estadoEf(s))&&(s.items||[]).some(i=>i.reserva)).length;const nRet=can('validar')?retrasadas().length:0;
+  const cnt=e=>act.filter(s=>estadoEf(s)===e).length;const parcial=act.filter(s=>EN_CURSO.includes(estadoEf(s))&&(s.items||[]).some(tieneRes)).length;const nRet=can('validar')?retrasadas().length:0;
   const nBq=bloqueosTodos().filter(x=>sigueBloq(x.it)).length,nDes=bloqueosTodos().length-nBq;const K=[['Solicitados por revisar',cnt('Enviada'),'Enviada','var(--info)'],['Sin actividad definida',sinGP,'_sgp','var(--accent)'],['Validadas (por cargar)',cnt('Validada'),'Validada','var(--ok)'],['Cargadas sin reserva',cnt('Exportada'),'Exportada','var(--warn)'],['Con reserva'+(parcial?` (+${parcial} parcial)`:''),cnt('Reservada'),'Reservada','#5530a8'],...(can('validar')?[['Actividades retrasadas',nRet,'_ret','var(--bad)']]:[]),['Referenciales sin código',refsP,'_ref','var(--bad)'],['Códigos bloqueados SAP'+(nDes?` (+${nDes} por cargar)`:''),nBq,'_bloq','#7d1a10']];
   const byE=ESTADOS.map(e=>[e,L.filter(s=>estadoEf(s)===e).length]);const mx=Math.max(1,...byE.map(x=>x[1]));
   const embs={};S.embarcaciones.forEach(e=>{if(estProy(e)!=='Cerrado'||act.some(s=>norm(s.header.proyecto)===norm(e.nombre)))embs[e.nombre]={n:0,abiertas:0,items:0}});act.forEach(s=>{const k=s.header.proyecto||'(sin embarcación)';embs[k]=embs[k]||{n:0,abiertas:0,items:0};embs[k].n++;embs[k].items+=(s.items||[]).length;if(!['Atendida','Reservada'].includes(s.estado))embs[k].abiertas++});
@@ -699,7 +700,7 @@ const soloProp=()=>S.owner?'':'<div class="warn" style="margin-bottom:10px">Solo
 function gCuenta(){const c=miCuenta()||{},cr=S.creds[c.id]||{};const M=S.mc||(S.mc={a:'',n:'',r:'',c1:cr.correo1||'',c2:cr.correo2||'',c3:cr.correo3||''});
   if(c.id==='__owner__')return '<div class="card">Acceso de recuperación: cree su usuario en la pestaña Usuarios.</div>';
   return `<div class="grid g2"><div class="card"><h2>Mis datos</h2><div class="small"><b>Usuario:</b> <span class="mono">${esc(c.id)}</span><br><b>Nombre:</b> ${esc(c.nombre)}<br><b>Rol:</b> ${esc(rolNombre(c.rol))}<br><b>Empresa:</b> ${esc((empBy(c.empresaId)||{}).nombre||'—')}</div>
-   <h2 style="margin-top:16px">Correos de envío</h2><p class="small muted" style="margin-top:-6px">Se usan en la columna Correo 1 (contrata) del Excel de carga de sus solicitudes. Puede poner varios correos en un mismo campo separados con punto y coma.</p>
+   <div class="small muted" style="margin-top:8px">App versión ${esc(APP_VERSION)} · actualizada ${esc(BUILD)}</div><h2 style="margin-top:16px">Correos de envío</h2><p class="small muted" style="margin-top:-6px">Se usan en la columna Correo 1 (contrata) del Excel de carga de sus solicitudes. Puede poner varios correos en un mismo campo separados con punto y coma.</p>
    <div class="grid">${[1,2,3].map(n=>`<div><label>Correo ${n}</label><input type="email" data-b="mc.c${n}" value="${esc(M['c'+n])}"></div>`).join('')}<button class="btn p" data-act="guardarCorreos">Guardar correos</button></div></div>
   <div class="card"><h2>Cambiar contraseña</h2><div class="grid"><div><label>Contraseña actual</label><input type="password" data-b="mc.a" value="${esc(M.a)}"></div><div><label>Nueva contraseña (mín. 6)</label><input type="password" data-b="mc.n" value="${esc(M.n)}"></div><div><label>Repetir nueva contraseña</label><input type="password" data-b="mc.r" value="${esc(M.r)}"></div>
    <button class="btn p" data-act="cambiarPw">Cambiar contraseña</button><p class="small muted">El administrador puede ver su contraseña para ayudarle si la olvida. Use una contraseña que no use en otros servicios.</p></div></div></div>`}
@@ -923,7 +924,7 @@ function checkNovedades(){if(S.novChecked||!S.cuenta||S.cuenta==='__owner__'||!S
   const vis=versionVista();if(verNum(vis)>=verNum(APP_VERSION))return;
   const nuevas=CHANGELOG.filter(c=>verNum(c.v)>verNum(vis)).slice(0,vis?6:1);S.modal={t:'novedades',L:nuevas};schedule()}
 function mNovedades(M){const L=M.todas?CHANGELOG:M.L;
-  return `<div class="row" style="gap:12px;align-items:center;margin-bottom:6px"><div style="width:64px;flex-shrink:0">${robotMini('happy')}</div><div><h2 style="margin:0">¡Novedades en la app! 🎉</h2><div class="small muted">Versión ${esc(APP_VERSION)}</div></div></div>
+  return `<div class="row" style="gap:12px;align-items:center;margin-bottom:6px"><div style="width:64px;flex-shrink:0">${robotMini('happy')}</div><div><h2 style="margin:0">¡Novedades en la app! 🎉</h2><div class="small muted">Versión ${esc(APP_VERSION)} · actualizada ${esc(BUILD)}</div></div></div>
   <div style="max-height:52vh;overflow:auto">${L.map(c=>`<div class="card" style="margin:10px 0 0;border-left:4px solid var(--accent)"><div class="row"><b>${esc(c.t)}</b><div style="flex:1"></div><span class="chip">v${esc(c.v)} · ${esc(c.f.split('-').reverse().join('/'))}</span></div><ul style="margin:8px 0 0;padding-left:18px;line-height:1.6">${c.items.map(x=>`<li>${x}</li>`).join('')}</ul></div>`).join('')}</div>
   <div class="mfoot">${M.todas?'':'<button class="btn" data-act="novTodas">Ver historial completo</button>'}<button class="btn" data-act="novMejora">💡 Proponer una mejora</button><button class="btn p" data-act="novOK">¡Entendido!</button></div>`}
 
@@ -1021,7 +1022,7 @@ document.addEventListener('click',ev=>{const a=ev.target.closest('a[data-mail]')
 /* ============ Estado efectivo, retrasos y periodo por embarcación ============ */
 const labEst=e=>e==='Enviada'?'Solicitado':e;
 const EN_CURSO=['Enviada','Validada','Exportada'];
-function completaRes(s){const it=s.items||[];return it.length>0&&it.some(i=>i.reserva)&&it.every(i=>i.reserva||isBloq(i))}
+function completaRes(s){const it=s.items||[];return it.length>0&&it.some(tieneRes)&&it.every(i=>tieneRes(i)||isBloq(i))}
 function estadoEf(s){return EN_CURSO.includes(s.estado)&&completaRes(s)?'Reservada':s.estado}
 const diasRetraso=()=>{const v=num((S.ajustes||{}).diasRetraso);return v>0?v:3};
 function diasEnCurso(s){return diasDesde(s.enviadaEn||s.fechaSolicitud)}
@@ -1032,6 +1033,14 @@ function retrasoCard(){if(!can('validar'))return '';const L=retrasadas();if(!L.l
    <div class="scroll" style="margin-top:8px"><table class="rs"><thead><tr><th>Días</th><th>Embarcación</th><th>Actividad</th><th>Empresa</th><th>Estado</th><th>Materiales sin reserva</th><th></th></tr></thead><tbody>${L.map(s=>{const e=empBy(s.empresaId),h=s.header;const sin=(s.items||[]).filter(i=>!i.reserva).length;
    return `<tr><td data-l="Días"><b style="color:var(--bad)">${diasEnCurso(s)}</b></td><td data-l="Embarcación"><b>${esc(h.proyecto||'—')}</b><div class="small muted">${esc(h.sistema||'')}</div></td><td data-l="Actividad">${h.pos?'Pos '+esc(h.pos)+' — ':''}${esc(h.nombreActividad||h.actividadTentativa||'Sin definir')}</td><td data-l="Empresa">${esc(e?e.nombre:(h.empresaTxt||'—'))}</td><td data-l="Estado">${chip(estadoEf(s))}</td><td data-l="Sin reserva">${sin} de ${(s.items||[]).length}</td><td><button class="btn s" data-act="open" data-id="${esc(s.id)}">Abrir</button></td></tr>`}).join('')}</tbody></table></div></div>`}
 function periodoEmb(nombre){const e=embBy(nombre);return (e&&e.periodo)||''}
+
+/* ============ Lectura tolerante de columnas Reserva / Posición / Estado ============ */
+const BUILD='2026-11-20 09:30';
+function colRes(r){for(const k in r){if(k.includes('reserva')&&!/fecha|estado|tipo|clase/.test(k)&&String(r[k]).trim()!=='')return String(cell(r[k])).trim()}return ''}
+function colPosRes(r){for(const k of ['posicion','posicionreserva','posreserva','posres','itemreserva','posicionres'])if(r[k]!==undefined&&String(r[k]).trim()!=='')return String(cell(r[k])).trim();
+  for(const k in r){if((k.startsWith('posicion')||(k.includes('pos')&&k.includes('res')))&&String(r[k]).trim()!=='')return String(cell(r[k])).trim()}return ''}
+function colEst(r){for(const k in r){if(k.startsWith('estado')&&String(r[k]).trim()!=='')return String(cell(r[k])).trim()}return ''}
+const tieneRes=it=>!!it.reserva||/^reserv/i.test(String(it.estado||''));
 /* ============ Modales ============ */
 function modalHTML(){const M=S.modal;let body='';
   if(M.t==='calc')body=mCalc(M);else if(M.t==='ref')body=mRef(M);else if(M.t==='mat')body=mMat(M);else if(M.t==='emb')body=mEmb(M);
@@ -1208,7 +1217,7 @@ async function importarSolicitud(){const f=await pickFile('.xlsx,.xls');if(!f)re
   if(emb){const sis=(emb.sistemas||[]).find(x=>norm(x.nombre)===norm(sistema));if(sis){if(!grafo&&sis.grafo)grafo=String(sis.grafo);if(!pos){const a=bestAct(sis,nact+' '+cell(r0.consideraciones));if(a){pos=String(a.pos);if(!nact)nact=a.nombre}}}}
   const id=newId('solicitudes');
   S.draft={id,estado:'Enviada',enviadaEn:nowISO(),origen:'excel',archivo:f.name,header:{proyecto:emb?emb.nombre:cell(r0.proyecto),sistema,grafo:String(grafo),pos:String(pos),nombreActividad:nact,consideraciones:cell(r0.consideraciones),empresaTxt:en},
-    items:rows.map(r=>{const c=String(cell(r.codigo));const m=matBy(c);return {codigo:c,desc:cell(r.textobrevedematerial)||(m&&m.desc)||'',um:cell(r.unmedidadeentrada)||(m&&m.um)||'',cantidad:String(cell(r.cantidad)),obs:String(cell(r.observaciones)),reserva:String(cell(r.reserva)),posicion:String(cell(r.posicion)),estado:String(cell(r.estado))}}),
+    items:rows.map(r=>{const c=String(cell(r.codigo));const m=matBy(c);return {codigo:c,desc:cell(r.textobrevedematerial)||(m&&m.desc)||'',um:cell(r.unmedidadeentrada)||(m&&m.um)||'',cantidad:String(cell(r.cantidad)),obs:String(cell(r.observaciones)),reserva:colRes(r),posicion:colPosRes(r),estado:/reserv/i.test(colEst(r))?'Reservado':colEst(r)}}),
     empresaId,createdBy:S.cuenta,fechaSolicitud:fs,fechaCarga:cell(r0.fechadecarga)||'',historial:[]};
   hist(S.draft,`Importó ${rows.length} ítems desde ${f.name}`);S.sel=id;S.isNew=true;S.dirty=true;S.view='detalle';render();
   const I=revisar(S.draft);toast(`Importado: ${rows.length} ítems · ${I.filter(x=>x.n==='error').length} error(es), ${I.filter(x=>x.n==='aviso').length} aviso(s). Revise y guarde.`)}
@@ -1487,14 +1496,17 @@ const CH={
   rolPerm(el){const r=S.rolesEd[+el.dataset.i],p=el.dataset.p;r.permisos=el.checked?[...new Set([...(r.permisos||[]),p])]:(r.permisos||[]).filter(x=>x!==p)},
   async embPeriodo(el){const e=S.embarcaciones.find(x=>x.id===el.dataset.id);const b=clone(e);delete b.id;b.periodo=el.value;await setDoc('embarcaciones/'+e.id,b);toast(`${e.nombre}: periodo ${el.value||'sin asignar'}`)},
   async embEstado(el){const e=S.embarcaciones.find(x=>x.id===el.dataset.id);const b=clone(e);delete b.id;b.estado=el.value;await setDoc('embarcaciones/'+e.id,b);toast(`${e.nombre}: proyecto ${el.value.toLowerCase()}`)},
-  async resXL(el){const f=el.files[0];if(!f)return;let rows;try{rows=await readXL(f)}catch(e){toast(e.message,'bad');return}const d=S.draft;let nR=0,nB=0;const used=new Set();const now=nowISO();
-    rows.forEach(r=>{const c=String(cell(r.codigo)).trim(),res=String(cell(r.reserva)).trim(),p=String(cell(r.posicion)).trim(),est=String(cell(r.estado)).trim();if(!c)return;
-      const bq=/bloq/i.test(est);const i=d.items.findIndex((it,ix)=>!used.has(ix)&&String(it.codigo)===c&&(bq?!it.reserva:true));if(i<0)return;used.add(i);const it=d.items[i];
+  async resXL(el){const f=el.files[0];if(!f)return;let rows;try{rows=await readXL(f)}catch(e){toast(e.message,'bad');return}const d=S.draft;let nR=0,nB=0,nSinNum=0;const used=new Set();const now=nowISO();const noEnc=[];
+    const cab=rows.length?Object.keys(rows[0]):[];
+    rows.forEach(r=>{const c=String(cell(r.codigo)).trim().replace(/\.0+$/,''),res=colRes(r),p=colPosRes(r),est=colEst(r);if(!c)return;
+      const bq=/bloq/i.test(est);const i=d.items.findIndex((it,ix)=>!used.has(ix)&&String(it.codigo).trim()===c&&(bq?!it.reserva:true));if(i<0){noEnc.push(c);return}used.add(i);const it=d.items[i];
       if(bq){if(!isBloq(it)){setEstSap(it,'Bloqueado');marcarCatalogo(c,'Bloqueado')}nB++;return}
-      if(!res)return;if((it.bloqueo&&it.bloqueo.desde)||it.refId)it.liberadoEn=now;if(isBloq(it)){setEstSap(it,'Reservado');marcarCatalogo(c,'')}
-      it.reserva=res;it.posicion=p;it.estado=/reserv/i.test(est)||!est?'Reservado':est;nR++});
-    if(d.items.every(i=>i.reserva||isBloq(i))&&d.items.some(i=>i.reserva)&&['Validada','Exportada'].includes(d.estado))d.estado='Reservada';
-    S.modal.msg=`${nR} ítem(s) con reserva${nB?` · ${nB} bloqueado(s) en SAP (quedan en seguimiento)`:''} · ${d.items.length-nR-nB} sin cambios.`;await saveDraft(`Actualizó reserva desde ${f.name} (${nR} reservados, ${nB} bloqueados)`);S.modal&&render()},
+      const esRes=/reserv/i.test(est);if(!res&&!esRes)return;
+      if((it.bloqueo&&it.bloqueo.desde)||it.refId)it.liberadoEn=now;if(isBloq(it)){setEstSap(it,'Reservado');marcarCatalogo(c,'')}
+      if(res){it.reserva=res;it.posicion=p||it.posicion||''}else nSinNum++;it.estado=esRes||!est?'Reservado':est;nR++});
+    if(d.items.length&&d.items.every(i=>tieneRes(i)||isBloq(i))&&d.items.some(tieneRes)&&['Enviada','Validada','Exportada'].includes(d.estado))d.estado='Reservada';
+    S.modal.msg=`${nR} ítem(s) reservado(s)${nB?` · ${nB} bloqueado(s) en SAP (en seguimiento)`:''}${nSinNum?` · ⚠ ${nSinNum} marcado(s) "Reservado" sin número de reserva en el archivo`:''}${noEnc.length?` · ⚠ ${noEnc.length} código(s) del archivo no están en esta solicitud: ${noEnc.slice(0,6).join(', ')}${noEnc.length>6?'…':''}`:''} · Columnas leídas: ${cab.slice(0,12).join(', ')}`;
+    await saveDraft(`Actualizó reserva desde ${f.name} (${nR} reservados, ${nB} bloqueados)`);S.modal&&render()},
 };
 /* ============ Eventos ============ */
 document.addEventListener('click',ev=>{const el=ev.target.closest('[data-act]');if(!el)return;
