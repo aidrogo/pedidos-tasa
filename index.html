@@ -536,13 +536,13 @@ function revisar(s){const I=[],h=s.header||{};const pre=['Borrador','Observada']
   if(h.proyecto&&!emb)I.push({n:'aviso',m:`La embarcación "${h.proyecto}" no está registrada.`});
   if(emb&&estProy(emb)==='Cerrado'&&!['Atendida','Anulada','Reservada'].includes(s.estado))I.push({n:'error',m:`El proyecto ${emb.nombre} está CERRADO: no se reciben solicitudes ni reservas.`});
   else if(emb&&estProy(emb)==='Por cerrar')I.push({n:'aviso',m:`El proyecto ${emb.nombre} está por cerrar.`});
-  if(!h.sistema)I.push({n:L,envio:1,m:P+'falta el sistema.'});
+  if(!h.sistema)I.push({n:L,m:pre?'Sistema sin definir: el planificador lo asignará.':'Falta el sistema.'});
   const sis=emb&&(emb.sistemas||[]).find(x=>norm(x.nombre)===norm(h.sistema));
   if(emb&&h.sistema&&!sis)I.push({n:'aviso',m:`El sistema "${h.sistema}" no existe en ${emb.nombre}.`});
-  if(!h.grafo)I.push({n:L,envio:1,m:P+'falta el grafo.',fix:sis&&sis.grafo?{k:'setGrafo',v:sis.grafo,l:'Usar '+sis.grafo}:null});
+  if(!h.grafo)I.push({n:L,m:pre?'Grafo sin definir: el planificador lo asignará.':'Falta el grafo.',fix:sis&&sis.grafo?{k:'setGrafo',v:sis.grafo,l:'Usar '+sis.grafo}:null});
   else if(sis&&sis.grafo&&String(sis.grafo)!==String(h.grafo))I.push({n:'aviso',m:`El grafo ${h.grafo} no coincide con el del sistema (${sis.grafo}).`,fix:{k:'setGrafo',v:sis.grafo,l:'Usar '+sis.grafo}});
   if(!h.pos){let sug=null;if(sis&&h.nombreActividad){sug=bestAct(sis,h.nombreActividad+' '+(h.consideraciones||''))}
-    I.push({n:L,envio:1,m:P+'falta la Pos. (actividad)'+(h.actividadTentativa?` — tentativa: "${h.actividadTentativa}"`:'')+'.',fix:sug?{k:'setPos',v:sug.pos,l:`Usar Pos ${sug.pos} — ${sug.nombre}`}:null})}
+    I.push({n:L,m:(pre?'Actividad (Pos.) sin definir: el planificador la asignará':'Falta la Pos. (actividad)')+(h.actividadTentativa?` — tentativa: "${h.actividadTentativa}"`:'')+'.',fix:sug?{k:'setPos',v:sug.pos,l:`Usar Pos ${sug.pos} — ${sug.nombre}`}:null})}
   if(!(s.items||[]).length)I.push({n:'error',m:'La solicitud no tiene materiales.'});
   (s.items||[]).forEach((it,i)=>{const tag=`Ítem ${i+1} (${it.codigo||'REF'} ${String(it.desc||'').slice(0,28)})`;
     if(!it.codigo){I.push({n:pre?'aviso':'error',m:`${tag}: material referencial sin código SAP${pre?' (el planificador le asignará el código)':''}.`,fix:can('editar_mat')?{k:'asignarRef',i,l:'Asignar código'}:null});}
@@ -566,7 +566,7 @@ function norm2(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').t
 
 /* ---------- Detalle / editor ---------- */
 function editable(s){if(['Atendida','Anulada'].includes(s.estado)||cerrada(s))return false;if(can('validar'))return true;
-  return can('crear')&&(s.createdBy===S.cuenta||s.empresaId===myEmpresa())&&['Borrador','Observada'].includes(s.estado)}
+  return can('crear')&&(s.createdBy===S.cuenta||s.empresaId===myEmpresa())&&['Borrador','Observada','Enviada'].includes(s.estado)}
 function vDetalle(){const s=S.draft;if(!s)return '<div class="empty">Seleccione una solicitud.</div>';
   const h=s.header,ed=editable(s),pl=can('validar'),I=revisar(s),err=I.filter(i=>i.n==='error').length;
   const emb=embBy(h.proyecto),sis=emb&&(emb.sistemas||[]).find(x=>norm(x.nombre)===norm(h.sistema));
@@ -639,7 +639,7 @@ function alertaInfo(s){const n=s.alertaId&&S.notifs.find(x=>x.id===s.alertaId);
 function acciones(s,err){const b=[],e=s.estado,pl=can('validar'),own=s.createdBy===S.cuenta||s.empresaId===myEmpresa();
   if(cerrada(s)){if(can('eliminar')&&!S.isNew)b.push(`<button class="btn d" data-act="eliminarSol">Eliminar definitivamente</button>`);return b.join('')||'<span class="muted small">Proyecto cerrado: solo lectura.</span>'}
   const bloqEnv=revisar(s).filter(x=>x.n==='error'||x.envio).length;
-  if(can('crear')&&own&&['Borrador','Observada'].includes(e))b.push(`<button class="btn a" data-act="estado" data-e="Enviada" ${bloqEnv?'disabled':''}>Enviar solicitud</button>${bloqEnv?'<span class="small muted">Para enviar, defina la embarcación, el sistema y la actividad (Pos.) y corrija los errores. Mientras tanto puede guardarla como borrador.</span>':''}`);
+  if(can('crear')&&own&&['Borrador','Observada'].includes(e))b.push(`<button class="btn a" data-act="estado" data-e="Enviada" ${bloqEnv?'disabled':''}>Enviar solicitud</button>${bloqEnv?'<span class="small muted">Para enviar, elija la embarcación y corrija los errores. El sistema, grafo y Pos. son opcionales: si no los conoce, el planificador los asignará.</span>':''}`);
   if(can('crear')&&!S.isNew||can('crear')&&(s.items||[]).length)b.push(`<button class="btn" data-act="plantSave">☆ Guardar como plantilla</button>`);
   if(pl&&['Enviada','Borrador','Observada'].includes(e)){b.push(`<button class="btn ok" data-act="estado" data-e="Validada" ${bloqEnv?'disabled title="Corrija los errores primero"':''}>Validar</button>`);b.push(`<button class="btn" data-act="observar">Observar (devolver al proveedor)</button>`)}
   if(can('exportar')&&['Validada','Exportada','Reservada'].includes(e))b.push(`<button class="btn p" data-act="exportar" ${err?'disabled':''}>⬇ Generar Excel para carga</button>`);
@@ -809,7 +809,7 @@ function estadoPanel(s){const e=s.estado,pl=can('validar');let idx=PASOS.findInd
   if(cerrada(s)){msg='El proyecto de esta embarcación está <b>cerrado</b>: la solicitud queda solo para consulta.';mood='worry'}
   else switch(e){
    case 'Borrador':msg=falta?`${S.isNew?'¡Vamos armando tu pedido! ':''}Cuando definas la embarcación y la actividad (Pos.) podrás enviarlo. Mientras tanto lo guardo automáticamente.`:'Todo listo ✔ Presiona <b>Enviar solicitud</b> y yo me encargo de avisar a los encargados.';mood=falta?'ok':'happy';break;
-   case 'Enviada':msg=pl?'Pedido recibido. Revisa los materiales y valídalo para preparar la carga.':'<b>¡Recibido! Tu pedido está siendo atendido.</b> El planificador está revisando los materiales.';working=true;break;
+   case 'Enviada':msg=pl?`Pedido recibido. ${!s.header.pos?'Asígnale la actividad (grafo y Pos.) y ':'Revisa los materiales y '}valídalo para preparar la carga.`:'<b>¡Recibido! Tu pedido está siendo atendido.</b> Mientras el planificador no lo revise, aún puedes <b>corregirlo</b>: agregar materiales olvidados o cambiar la embarcación (se guarda solo).';working=true;break;
    case 'Observada':msg=`Tu pedido tiene observaciones${s.observacion?': <b>'+esc(s.observacion)+'</b>':''}. Corrígelo y vuelve a enviarlo.`;mood='worry';break;
    case 'Validada':msg='Pedido validado ✔ Preparando el archivo para la carga de la reserva…';working=true;break;
    case 'Exportada':msg='Cargando la reserva en el sistema… En cuanto tenga el número de reserva y las posiciones las verás aquí.';working=true;break;
@@ -901,8 +901,9 @@ function mImpLista(M){const R=M.rows||[];const n=R.filter(r=>r.usar).length,nref
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="impListaOK" ${n?'':'disabled'}>Agregar ${n} material(es)</button></div>`}
 
 /* ============ Novedades de versión ============ */
-const APP_VERSION='1.9';
+const APP_VERSION='1.10';
 const CHANGELOG=[
+ {v:'1.10',f:'2026-11-20',t:'Envío más flexible y correo por Gmail',items:['📨 Puede <b>enviar la solicitud sin grafo ni Pos.</b> si no los conoce: el planificador los asignará. Solo se exige la embarcación.','✏ Mientras su solicitud <b>no haya sido revisada</b>, puede corregirla: agregar materiales olvidados o cambiar la embarcación.','✉ Los correos se abren directo en <b>Gmail</b>, <b>Outlook web</b> o la app de correo del equipo. La app recuerda su elección.']},
  {v:'1.9',f:'2026-11-19',t:'Carga diaria de actividades y grafos',items:['⬆ En Embarcaciones: <b>Cargar actividades y grafos (Excel)</b> con vista previa. Solo se agrega lo nuevo; lo existente se conserva y no se elimina nada.','⚠ Si un grafo o nombre de actividad cambió, usted decide si actualizarlo.']},
  {v:'1.8',f:'2026-11-19',t:'Estados SAP y pendientes de la contrata',items:['✅ El Excel devuelto por el script actualiza cada material como <b>Reservado</b> o <b>Bloqueado</b>.','🔓 En Bloqueos: marque <b>Solicitud de desbloqueo enviada</b> y, cuando el código esté desbloqueado, cargue su <b>reserva y posición</b> ahí mismo.','📋 Las contratas ven en <b>Pendientes</b> sus códigos bloqueados, sus materiales sin código y una alerta 🎉 cuando ya tienen reserva.']},
  {v:'1.7',f:'2026-11-19',t:'Buzón de mejoras y novedades',items:['💡 Nuevo <b>Buzón de mejoras</b>: proponga funciones, reporte errores y vote 👍 las ideas de otros usuarios.','📣 Esta ventana de <b>novedades</b> le avisará cada vez que la app tenga funciones nuevas.']},
@@ -971,7 +972,7 @@ function mAvisoRes(M){const C=correosSol(M.s);const h=M.s.header;const lineas=M.
   <label>Para · Contrata</label><div class="mono small" style="margin-bottom:6px;word-break:break-all">${n.para.map(esc).join('; ')||'— sin correos —'}</div>
   <label>CC · Responsables</label><div class="mono small" style="margin-bottom:6px;word-break:break-all">${n.cc.map(esc).join('; ')||'—'}</div>
   <label>Mensaje</label><textarea rows="8" readonly>${esc(n.asunto+'\n\n'+n.cuerpo)}</textarea>
-  <div class="mfoot" style="justify-content:flex-start">${n.para.length?`<a class="btn a" href="${esc(mailtoDe(n))}" target="_blank" rel="noopener">✉ Abrir en mi correo</a>`:''}<button class="btn" data-act="copiar" data-txt="${esc(n.asunto+'\n\n'+n.cuerpo)}">Copiar mensaje</button><div style="flex:1"></div><button class="btn" data-act="closeM">Cerrar</button></div>`}
+  <div class="mfoot" style="justify-content:flex-start">${mailBtns(n)}<button class="btn" data-act="copiar" data-txt="${esc(n.asunto+'\n\n'+n.cuerpo)}">Copiar mensaje</button><div style="flex:1"></div><button class="btn" data-act="closeM">Cerrar</button></div>`}
 
 /* ============ Carga diaria de actividades y grafos (sin reemplazar ni borrar) ============ */
 const posKey=p=>{const t=String(p??'').trim();return /^\d+$/.test(t)?String(parseInt(t,10)):t.toUpperCase()};
@@ -1007,6 +1008,15 @@ function mImpEmb(M){const r=M.plan.res;const lst=(t,l,c)=>l.length?`<details ${l
    <label style="display:flex;gap:6px;align-items:center;font-weight:500;margin:6px 0 0"><input type="checkbox" style="width:auto" data-b="modal.updNombre" ${M.updNombre?'checked':''}> Actualizar el nombre con el del archivo (si no, se conserva el actual)</label></div>`:''}
   ${lst('Filas omitidas',r.omitidas,'var(--bad)')}
   <div class="mfoot"><button class="btn" data-act="closeM">Cancelar</button><button class="btn p" data-act="impEmbOK" ${cambios?'':'disabled'}>${cambios?`Aplicar ${cambios} cambio(s)`:'No hay nada nuevo que cargar'}</button></div>`}
+
+/* ============ Enviar correo desde Gmail, Outlook o la app del equipo ============ */
+function cuerpoCorto(n){return n.cuerpo.length>1800?n.cuerpo.slice(0,1800)+'\n…':n.cuerpo}
+function gmailDe(n){return 'https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(n.para.join(','))+((n.cc||[]).length?'&cc='+encodeURIComponent(n.cc.join(',')):'')+'&su='+encodeURIComponent(n.asunto)+'&body='+encodeURIComponent(cuerpoCorto(n))}
+function outlookDe(n){return 'https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(n.para.join(';'))+((n.cc||[]).length?'&cc='+encodeURIComponent(n.cc.join(';')):'')+'&subject='+encodeURIComponent(n.asunto)+'&body='+encodeURIComponent(cuerpoCorto(n))}
+function mailBtns(n){if(!n.para||!n.para.length)return '';const pref=(()=>{try{return localStorage.getItem('pm_mail')||''}catch(e){return ''}})();
+  const B=[['gmail',gmailDe(n),'Gmail'],['outlook',outlookDe(n),'Outlook web'],['app',mailtoDe(n),'App de correo']];if(pref)B.sort((a,b)=>(b[0]===pref)-(a[0]===pref));
+  return `<div style="width:100%"><div class="small muted" style="margin-bottom:4px">Abrir el correo listo en:</div><div class="row">${B.map(([k,u,l],i)=>`<a class="btn ${i===0?'a':''}" href="${esc(u)}" target="_blank" rel="noopener" data-mail="${k}">✉ ${l}</a>`).join('')}</div></div>`}
+document.addEventListener('click',ev=>{const a=ev.target.closest('a[data-mail]');if(a){try{localStorage.setItem('pm_mail',a.dataset.mail)}catch(e){}}},true);
 /* ============ Modales ============ */
 function modalHTML(){const M=S.modal;let body='';
   if(M.t==='calc')body=mCalc(M);else if(M.t==='ref')body=mRef(M);else if(M.t==='mat')body=mMat(M);else if(M.t==='emb')body=mEmb(M);
@@ -1127,12 +1137,12 @@ async function crearAlerta(d){const C=correosSol(d);const para=C.c3,cc=C.c2;
   S.modal={t:'alerta',n:{id,...n}};render()}
 function mailtoDe(n){return 'mailto:'+n.para.map(encodeURIComponent).join(',')+'?'+((n.cc||[]).length?'cc='+n.cc.map(encodeURIComponent).join(',')+'&':'')+'subject='+encodeURIComponent(n.asunto)+'&body='+encodeURIComponent(n.cuerpo.length>1800?n.cuerpo.slice(0,1800)+'\n…':n.cuerpo)}
 function mAlerta(M){const n=M.n;return `<h2>🔔 Alerta de nueva solicitud</h2>
-  <p class="small muted" style="margin-top:-8px">La alerta quedó registrada. Envíela desde su correo con un clic (o copie el texto si su correo no se abre).</p>
+  <p class="small muted" style="margin-top:-8px">La alerta quedó registrada. Envíela con un clic desde <b>Gmail</b>, <b>Outlook</b> o la app de correo de su equipo (o copie el texto).</p>
   <label>Para · Diseño</label><div class="mono small" style="margin-bottom:8px;word-break:break-all">${n.para.map(esc).join('; ')}</div>
   <label>CC · Responsables</label><div class="mono small" style="margin-bottom:8px;word-break:break-all">${(n.cc||[]).map(esc).join('; ')||'—'}</div>
   <label>Asunto</label><div class="small" style="margin-bottom:8px"><b>${esc(n.asunto)}</b></div>
   <label>Mensaje</label><textarea rows="9" readonly>${esc(n.cuerpo)}</textarea>
-  <div class="mfoot" style="justify-content:flex-start"><a class="btn a" href="${esc(mailtoDe(n))}" target="_blank" rel="noopener">✉ Abrir en mi correo</a><button class="btn" data-act="copiar" data-txt="${esc(n.para.join('; '))}">Copiar Para</button><button class="btn" data-act="copiar" data-txt="${esc((n.cc||[]).join('; '))}">Copiar CC</button><button class="btn" data-act="copiar" data-txt="${esc(n.asunto+'\n\n'+n.cuerpo)}">Copiar mensaje</button><div style="flex:1"></div><button class="btn ok" data-act="alertaEnviada" data-id="${esc(n.id)}">Marcar como enviada</button><button class="btn" data-act="closeM">Cerrar</button></div>`}
+  <div class="mfoot" style="justify-content:flex-start">${mailBtns(n)}<button class="btn" data-act="copiar" data-txt="${esc(n.para.join('; '))}">Copiar Para</button><button class="btn" data-act="copiar" data-txt="${esc((n.cc||[]).join('; '))}">Copiar CC</button><button class="btn" data-act="copiar" data-txt="${esc(n.asunto+'\n\n'+n.cuerpo)}">Copiar mensaje</button><div style="flex:1"></div><button class="btn ok" data-act="alertaEnviada" data-id="${esc(n.id)}">Marcar como enviada</button><button class="btn" data-act="closeM">Cerrar</button></div>`}
 async function saveDraft(msg,quiet){const s=S.draft;s.updatedAt=nowISO();if(msg)hist(s,msg);
   const body=clone(s);delete body.id;S.dirty=false;clearTimeout(autoT);await setDoc('solicitudes/'+s.id,body);S.isNew=false;S.lastAuto=quiet?new Date():null;if(quiet)refreshSide();else render();}
 const tieneContenido=d=>d&&((d.items||[]).length||d.header.proyecto||d.header.actividadTentativa||d.header.consideraciones);
@@ -1195,7 +1205,7 @@ const ACT={
   kpiEmb(el){S.filt={q:'',estado:'',emb:el.dataset.e,empresa:''};S.view='solicitudes';render()},
   open(el){openSol(el.dataset.id)},
   importXL(){importarSolicitud()},
-  async guardar(){const imp=S.isNew&&S.draft.origen==='excel'&&S.draft.estado==='Enviada'&&!S.draft.alertaId;await saveDraft(S.isNew?'Guardó la solicitud':'Editó la solicitud');toast('Guardado');if(imp)await crearAlerta(S.draft)},
+  async guardar(){if(S.draft&&S.draft.estado==='Enviada'&&!can('validar')&&!S.isNew){await saveDraft('Corrigió la solicitud enviada (aún sin revisar)');toast('Cambios guardados');return}const imp=S.isNew&&S.draft.origen==='excel'&&S.draft.estado==='Enviada'&&!S.draft.alertaId;await saveDraft(S.isNew?'Guardó la solicitud':'Editó la solicitud');toast('Guardado');if(imp)await crearAlerta(S.draft)},
   delItem(el){S.draft.items.splice(+el.dataset.i,1);S.dirty=true;render()},
   calcItem(el){const i=+el.dataset.i;const m=matBy(S.draft.items[i].codigo);if(m&&m.calc)openCalc(m,i)},
   calcOK(){const M=S.modal,o=calcOut(M.calc,M.vals);if(o.err)return;const c=M.calc;let obs='';
