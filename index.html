@@ -437,6 +437,7 @@ function render(){
    <button class="btn s" style="background:var(--navy2);color:#fff;border-color:#2c4a77" data-act="logout">Salir</button></div>
    ${S.demo?'<div class="banner">Modo demostración (falta configurar Firebase en config.js): los datos no se guardan. Usuario de prueba: <b>admin</b> / <b>admin123</b>.</div>':''}
    ${S.fb&&(S.lento||S.offline)?`<div class="banner" style="background:#fde6e3;border-color:#eea79d;color:#701a10">${S.lento?'⏳ Hay cambios que todavía no llegan al servidor. Revise su conexión a internet y <b>no cierre esta página</b> hasta que el indicador quede en verde.':'⚠ Sin conexión con el servidor: lo que ve puede estar desactualizado y sus cambios se enviarán al reconectar.'}</div>`:''}
+   ${S.nuevaVersion?`<div class="banner" style="background:#d6e4fc;border-color:#9fbdf0;color:#123c8f;display:flex;gap:10px;align-items:center;flex-wrap:wrap">🚀 Hay una <b>nueva versión</b> de la app (${esc(S.nuevaVersion)}). <button class="btn s p" data-act="recargar">Actualizar ahora</button></div>`:''}
    ${S.stale?'<div class="banner">No se puede conectar con la base de datos todavía; lo mostrado puede estar desactualizado.</div>':''}
    ${S.cuenta==='__owner__'?'<div class="banner">Acceso de recuperación de la propietaria. Cree o restablezca su usuario en Gestión → Usuarios.</div>':''}
    <div class="layout">${nav('side')}<main>${S.view!=='detalle'?botVista(S.view):''}${view()}</main></div>${nav('bottom')}${S.modal?modalHTML():''}`;
@@ -1035,7 +1036,7 @@ function retrasoCard(){if(!can('validar'))return '';const L=retrasadas();if(!L.l
 function periodoEmb(nombre){const e=embBy(nombre);return (e&&e.periodo)||''}
 
 /* ============ Lectura tolerante de columnas Reserva / Posición / Estado ============ */
-const BUILD='2026-11-20 09:30';
+const BUILD='2026-11-20 09:45';
 function colRes(r){for(const k in r){if(k.includes('reserva')&&!/fecha|estado|tipo|clase/.test(k)&&String(r[k]).trim()!=='')return String(cell(r[k])).trim()}return ''}
 function colPosRes(r){for(const k of ['posicion','posicionreserva','posreserva','posres','itemreserva','posicionres'])if(r[k]!==undefined&&String(r[k]).trim()!=='')return String(cell(r[k])).trim();
   for(const k in r){if((k.startsWith('posicion')||(k.includes('pos')&&k.includes('res')))&&String(r[k]).trim()!=='')return String(cell(r[k])).trim()}return ''}
@@ -1371,6 +1372,7 @@ const ACT={
     await guardarItemSol(sid,i,it=>{it.reserva=r;it.posicion=p;it.liberadoEn=nowISO();setEstSap(it,'Reservado')},`Código ${code} desbloqueado: reserva ${r} / pos ${p}`);
     marcarCatalogo(code,'');delete S.resIn[k];toast(`${code}: reserva ${r}/${p} registrada`);
     const s1=S.solicitudes.find(x=>x.id===sid)||s0;const it=clone(s1.items[i]);it.reserva=r;it.posicion=p;S.modal={t:'avisoRes',s:clone(s1),items:[it]};render()},
+  async recargar(){if(S.dirty&&S.draft&&editable(S.draft)&&tieneContenido(S.draft))await saveDraft(null,true).catch(()=>{});location.reload()},
   async copiarRes(){const s=S.draft;const txt=(s.items||[]).map(i=>(i.reserva||'')+'\t'+(i.posicion||'')).join('\n');
     try{await navigator.clipboard.writeText(txt);toast('Copiado: péguelo en Excel o en su sistema')}catch(e){S.modal={t:'info',title:'Reservas y posiciones',html:`<p class="small">Seleccione todo y copie (Ctrl+C):</p><textarea rows="12" readonly>${esc(txt)}</textarea>`};render()}},
   async xlRes(){if(!window.XLSX)return;await saveFile(nombreArchivo(S.draft),buildXL(S.draft))},
@@ -1693,6 +1695,10 @@ async function importar(D){const db=FB.raw;const prog=m=>{S.resProg=m;S.gTab='da
   catch(e){prog('Se detuvo: '+errMsg(e)+(avisos.length?' · '+avisos.join(' · '):''))}
   render()}
 
+/* Aviso de nueva versión publicada en GitHub (evita trabajar con una copia vieja en caché) */
+async function revisarVersion(){if(!S.fb||S.nuevaVersion||location.protocol==='file:')return;try{const r=await fetch(location.href.split('#')[0]+(location.search?'&':'?')+'v='+Date.now(),{cache:'no-store'});const t=await r.text();const m=t.match(/const BUILD='([^']+)'/);
+  if(m&&m[1]!==BUILD){S.nuevaVersion=m[1];schedule()}}catch(e){}}
+setInterval(revisarVersion,5*60*1000);setTimeout(revisarVersion,15000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')revisarVersion()});
 async function boot(){const cfg=window.FIREBASE_CONFIG;
   if(!cfg||!cfg.apiKey||!window.firebase){if(window.claude&&window.claude.use)return bootClaude();S.demo=true;S.db=memDB();S.uid='demo';S.owner=true;await seedDemo(S.db);S.boot='ok';subscribeDemo();render();return}
   S.fb=true;firebase.initializeApp(cfg);FB.auth=firebase.auth();const fs=firebase.firestore();
