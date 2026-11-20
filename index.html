@@ -503,7 +503,7 @@ function vInicio(){
   const sinGP=act.filter(s=>['Enviada','Borrador','Observada'].includes(s.estado)&&(!s.header.grafo||!s.header.pos)).length;
   const refsP=S.materiales.filter(m=>m.ref&&m.estadoRef==='pendiente').length;
   const cnt=e=>act.filter(s=>estadoEf(s)===e).length;const parcial=act.filter(s=>EN_CURSO.includes(estadoEf(s))&&(s.items||[]).some(tieneRes)).length;const nRet=can('validar')?retrasadas().length:0;
-  const nBq=bloqueosTodos().filter(x=>sigueBloq(x.it)).length,nDes=bloqueosTodos().length-nBq;const K=[['Solicitados por revisar',cnt('Enviada'),'Enviada','var(--info)'],['Sin actividad definida',sinGP,'_sgp','var(--accent)'],['Validadas (por cargar)',cnt('Validada'),'Validada','var(--ok)'],['Cargadas sin reserva',cnt('Exportada'),'Exportada','var(--warn)'],['Con reserva'+(parcial?` (+${parcial} parcial)`:''),cnt('Reservada'),'Reservada','#5530a8'],...(can('validar')?[['Actividades retrasadas',nRet,'_ret','var(--bad)']]:[]),['Referenciales sin código',refsP,'_ref','var(--bad)'],['Códigos bloqueados SAP'+(nDes?` (+${nDes} por cargar)`:''),nBq,'_bloq','#7d1a10']];
+  const nBq=bloqueosTodos().filter(x=>sigueBloq(x.it)).length,nDes=bloqueosTodos().length-nBq;const K=[['Solicitados por revisar',cnt('Enviada'),'Enviada','var(--info)'],['Sin actividad definida',sinGP,'_sgp','var(--accent)'],['Validadas (por cargar)',cnt('Validada'),'Validada','var(--ok)'],['Cargadas sin reserva',cnt('Exportada'),'Exportada','var(--warn)'],['Con reserva'+(parcial?` (+${parcial} parcial)`:''),act.filter(conReserva).length,'_res','#5530a8'],...(can('validar')?[['Actividades retrasadas',nRet,'_ret','var(--bad)']]:[]),['Referenciales sin código',refsP,'_ref','var(--bad)'],['Códigos bloqueados SAP'+(nDes?` (+${nDes} por cargar)`:''),nBq,'_bloq','#7d1a10']];
   const byE=ESTADOS.map(e=>[e,L.filter(s=>estadoEf(s)===e).length]);const mx=Math.max(1,...byE.map(x=>x[1]));
   const embs={};S.embarcaciones.forEach(e=>{if(estProy(e)!=='Cerrado'||act.some(s=>norm(s.header.proyecto)===norm(e.nombre)))embs[e.nombre]={n:0,abiertas:0,items:0}});act.forEach(s=>{const k=s.header.proyecto||'(sin embarcación)';embs[k]=embs[k]||{n:0,abiertas:0,items:0};embs[k].n++;embs[k].items+=(s.items||[]).length;if(!['Atendida','Reservada'].includes(s.estado))embs[k].abiertas++});
   const accion=act.filter(s=>{if(can('validar'))return ['Enviada','Validada','Exportada'].includes(s.estado);return ['Borrador','Observada'].includes(s.estado)}).sort((a,b)=>(b.fechaSolicitud||'').localeCompare(a.fechaSolicitud||'')).slice(0,8);
@@ -519,7 +519,7 @@ function tablaSol(L,issuesOf){return `<div class="scroll"><table class="rs"><the
 
 /* ---------- Lista ---------- */
 function vLista(){const f=S.filt;let L=visibles();
-  if(f.estado==='_sgp')L=L.filter(s=>!['Anulada','Atendida'].includes(s.estado)&&(!s.header.grafo||!s.header.pos));else if(f.estado)L=L.filter(s=>estadoEf(s)===f.estado);
+  if(f.estado==='_sgp')L=L.filter(s=>!['Anulada','Atendida'].includes(s.estado)&&(!s.header.grafo||!s.header.pos));else if(f.estado==='_res')L=L.filter(conReserva);else if(f.estado)L=L.filter(s=>estadoEf(s)===f.estado);
   if(f.emb)L=L.filter(s=>(s.header.proyecto||'(sin embarcación)')===f.emb);
   if(f.empresa)L=L.filter(s=>s.empresaId===f.empresa);
   if(f.q){const q=norm(f.q);L=L.filter(s=>norm(JSON.stringify([s.header,(s.items||[]).map(i=>[i.codigo,i.desc,i.reserva])])).includes(q))}
@@ -527,7 +527,7 @@ function vLista(){const f=S.filt;let L=visibles();
   const embs=[...new Set(visibles(false).map(s=>s.header.proyecto||'(sin embarcación)'))];
   return `<div class="head"><h1>Solicitudes</h1>${perSel()}<span class="muted">${L.length} resultado(s)</span><div class="sp"></div>${can('validar')?'<button class="btn" data-act="importXL">⬆ Importar Excel recibido</button>':''}${can('crear')?'<button class="btn a" data-act="go" data-v="nueva">+ Nueva</button>':''}</div>
   <div class="card"><div class="grid g4"><div><label>Buscar (código, reserva, actividad…)</label><input data-b="filt.q" data-rr="1" value="${esc(f.q)}"></div>
-  <div><label>Estado</label><select data-b="filt.estado" data-rr="1"><option value="">Todos</option><option value="_sgp" ${f.estado==='_sgp'?'selected':''}>Sin actividad definida</option>${ESTADOS.map(e=>`<option value="${e}" ${f.estado===e?'selected':''}>${labEst(e)}</option>`).join('')}</select></div>
+  <div><label>Estado</label><select data-b="filt.estado" data-rr="1"><option value="">Todos</option><option value="_sgp" ${f.estado==='_sgp'?'selected':''}>Sin actividad definida</option><option value="_res" ${f.estado==='_res'?'selected':''}>Con reserva (reservadas + atendidas)</option>${ESTADOS.map(e=>`<option value="${e}" ${f.estado===e?'selected':''}>${labEst(e)}</option>`).join('')}</select></div>
   <div><label>Embarcación</label><select data-b="filt.emb" data-rr="1"><option value="">Todas</option>${embs.map(e=>`<option ${f.emb===e?'selected':''}>${esc(e)}</option>`).join('')}</select></div>
   ${can('ver_todas')?`<div><label>Empresa</label><select data-b="filt.empresa" data-rr="1"><option value="">Todas</option>${S.empresas.map(e=>`<option value="${e.id}" ${f.empresa===e.id?'selected':''}>${esc(e.nombre)}</option>`).join('')}</select></div>`:''}</div></div>
   <div class="card">${L.length?tablaSol(L):'<div class="empty">No hay solicitudes con estos filtros.</div>'}</div>`}
@@ -906,7 +906,7 @@ function mImpLista(M){const R=M.rows||[];const n=R.filter(r=>r.usar).length,nref
 /* ============ Novedades de versión ============ */
 const APP_VERSION='1.9';
 const CHANGELOG=[
- {v:'1.9',f:'2026-11-20',t:'Carga diaria, envío flexible y alertas de retraso',items:['⬆ En Embarcaciones: <b>Cargar actividades y grafos (Excel)</b> con vista previa; solo se agrega lo nuevo y no se elimina nada.','📨 Puede <b>enviar la solicitud sin grafo ni Pos.</b> si no los conoce: el planificador los asignará.','✏ Mientras su solicitud <b>no haya sido revisada</b>, puede corregirla (agregar materiales o cambiar la embarcación).','✉ Los correos se abren directo en <b>Gmail</b>, <b>Outlook web</b> o la app de correo del equipo.','🏷 El estado <b>Enviada</b> ahora se llama <b>Solicitado</b>, y el tablero cuenta bien las solicitudes con reserva.','⏰ Alerta de <b>actividades retrasadas</b> para planificadores; 📅 el periodo se asigna a cada embarcación.']},
+ {v:'1.9',f:'2026-11-20',t:'Carga diaria, envío flexible y alertas de retraso',items:['⬆ En Embarcaciones: <b>Cargar actividades y grafos (Excel)</b> con vista previa; solo se agrega lo nuevo y no se elimina nada.','📨 Puede <b>enviar la solicitud sin grafo ni Pos.</b> si no los conoce: el planificador los asignará.','✏ Mientras su solicitud <b>no haya sido revisada</b>, puede corregirla (agregar materiales o cambiar la embarcación).','✉ Los correos se abren directo en <b>Gmail</b>, <b>Outlook web</b> o la app de correo del equipo.','🏷 El estado <b>Enviada</b> ahora se llama <b>Solicitado</b>, y el indicador <b>Con reserva</b> cuenta las solicitudes reservadas y las ya atendidas.','⏰ Alerta de <b>actividades retrasadas</b> para planificadores; 📅 el periodo se asigna a cada embarcación.']},
  {v:'1.8',f:'2026-11-19',t:'Estados SAP y pendientes de la contrata',items:['✅ El Excel devuelto por el script actualiza cada material como <b>Reservado</b> o <b>Bloqueado</b>.','🔓 En Bloqueos: marque <b>Solicitud de desbloqueo enviada</b> y, cuando el código esté desbloqueado, cargue su <b>reserva y posición</b> ahí mismo.','📋 Las contratas ven en <b>Pendientes</b> sus códigos bloqueados, sus materiales sin código y una alerta 🎉 cuando ya tienen reserva.']},
  {v:'1.7',f:'2026-11-19',t:'Buzón de mejoras y novedades',items:['💡 Nuevo <b>Buzón de mejoras</b>: proponga funciones, reporte errores y vote 👍 las ideas de otros usuarios.','📣 Esta ventana de <b>novedades</b> le avisará cada vez que la app tenga funciones nuevas.']},
  {v:'1.6',f:'2026-11-19',t:'Unidades, listas y correos',items:['📏 Más unidades de medida (PZA, KIT, M3, TON, BAR…) y el administrador puede agregar nuevas.','⬆ <b>Importar lista</b>: suba su Excel o pegue filas copiadas y la app busca cada material en el catálogo.','✉ Correos de la solicitud: Correo 1 contrata, Correo 2 responsables y Correo 3 diseño. La alerta va PARA diseño con CC a responsables.']},
@@ -1024,6 +1024,7 @@ document.addEventListener('click',ev=>{const a=ev.target.closest('a[data-mail]')
 const labEst=e=>e==='Enviada'?'Solicitado':e;
 const EN_CURSO=['Enviada','Validada','Exportada'];
 function completaRes(s){const it=s.items||[];return it.length>0&&it.some(tieneRes)&&it.every(i=>tieneRes(i)||isBloq(i))}
+function conReserva(s){const e=estadoEf(s);return e==='Reservada'||e==='Atendida'}
 function estadoEf(s){return EN_CURSO.includes(s.estado)&&completaRes(s)?'Reservada':s.estado}
 const diasRetraso=()=>{const v=num((S.ajustes||{}).diasRetraso);return v>0?v:3};
 function diasEnCurso(s){return diasDesde(s.enviadaEn||s.fechaSolicitud)}
@@ -1036,7 +1037,7 @@ function retrasoCard(){if(!can('validar'))return '';const L=retrasadas();if(!L.l
 function periodoEmb(nombre){const e=embBy(nombre);return (e&&e.periodo)||''}
 
 /* ============ Lectura tolerante de columnas Reserva / Posición / Estado ============ */
-const BUILD='2026-11-20 09:45';
+const BUILD='2026-11-20 09:50';
 function colRes(r){for(const k in r){if(k.includes('reserva')&&!/fecha|estado|tipo|clase/.test(k)&&String(r[k]).trim()!=='')return String(cell(r[k])).trim()}return ''}
 function colPosRes(r){for(const k of ['posicion','posicionreserva','posreserva','posres','itemreserva','posicionres'])if(r[k]!==undefined&&String(r[k]).trim()!=='')return String(cell(r[k])).trim();
   for(const k in r){if((k.startsWith('posicion')||(k.includes('pos')&&k.includes('res')))&&String(r[k]).trim()!=='')return String(cell(r[k])).trim()}return ''}
