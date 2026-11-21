@@ -29,7 +29,9 @@ ejecutable = C*digo_reserva*.exe
 intervalo_minutos = 15
 ; si / no
 exportar        = si
-ejecutar_exe    = si
+; El Código_reserva actual (Reservatron) abre una ventana y pide confirmar cada archivo:
+; déjelo en 'no' hasta tener la versión con modo automático.
+ejecutar_exe    = no
 leer_reservados = si
 tiempo_max_exe_minutos = 30
 ; Solo lee Excel de Reservados modificados desde esta fecha (AAAA-MM-DD HH:MM).

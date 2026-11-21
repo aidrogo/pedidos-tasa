@@ -77,7 +77,7 @@ DEF_CFG = {
     'carpetas': {'raices': r'Z:\Diseño\RESERVAS\Reservas\{año}; Z:\Diseño\RESERVAS\Reservas\{año_anterior}',
                  'sistemas': 'TUBERIAS', 'subcarpeta_solicitados': 'Solicitados', 'subcarpeta_reservados': 'Reservados',
                  'ejecutable': 'C*digo_reserva*.exe'},
-    'proceso': {'intervalo_minutos': '15', 'exportar': 'si', 'ejecutar_exe': 'si', 'leer_reservados': 'si',
+    'proceso': {'intervalo_minutos': '15', 'exportar': 'si', 'ejecutar_exe': 'no', 'leer_reservados': 'si',
                 'tiempo_max_exe_minutos': '30', 'procesar_desde': '', 'modo_prueba': 'no', 'zona_horaria': '-5'},
     'red': {'proxy': ''},
 }

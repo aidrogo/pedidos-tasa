@@ -43,7 +43,7 @@ App: solicitud "Reservada", la contrata ve sus reservas y los bloqueos quedan en
 
 ## Primera puesta en marcha recomendada
 * Al primer arranque el bot **solo lee los Excel de *Reservados* que aparezcan desde ese momento**: no toca el histórico. Para registrar algo anterior, ponga una fecha en `procesar_desde`.
-* Si prefiere seguir ejecutando el .exe a mano los primeros días, use `ejecutar_exe = no`. El bot dejará los Excel en *Solicitados* y leerá *Reservados*.
+* Por defecto `ejecutar_exe = no`: el bot deja los Excel en *Solicitados* y lee *Reservados*, y ustedes siguen ejecutando el Reservatron a mano. La versión actual del Reservatron abre una ventana, espera **▶ INICIAR PROCESO** y pide confirmar cada archivo, así que no puede correr sin una persona. Active `ejecutar_exe = si` solo con una versión que tenga modo automático.
 
 ## Archivos
 | Archivo | Para qué |
