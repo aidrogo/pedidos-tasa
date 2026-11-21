@@ -75,7 +75,7 @@ def cell_str(v):
 DEF_CFG = {
     'firebase': {'api_key': '', 'project_id': 'pedidos-tasa', 'dominio': 'pedidos-tasa.app', 'usuario': 'bot', 'clave': ''},
     'carpetas': {'raices': r'Z:\Diseño\RESERVAS\Reservas\{año}; Z:\Diseño\RESERVAS\Reservas\{año_anterior}',
-                 'sistemas': 'TUBERIAS', 'subcarpeta_solicitados': 'Solicitados', 'subcarpeta_reservados': 'Reservados',
+                 'sistemas': '*', 'carpeta_especialidad': 'TUBERIAS', 'subcarpeta_solicitados': 'Solicitados', 'subcarpeta_reservados': 'Reservados',
                  'ejecutable': 'C*digo_reserva*.exe'},
     'proceso': {'intervalo_minutos': '15', 'exportar': 'si', 'ejecutar_exe': 'no', 'leer_reservados': 'si',
                 'tiempo_max_exe_minutos': '30', 'procesar_desde': '', 'modo_prueba': 'no', 'zona_horaria': '-5'},
@@ -83,6 +83,17 @@ DEF_CFG = {
 }
 
 class Cfg:
+    def automatiza(self, sistema):
+        return self.todos or norm(sistema) in self.sis_norm
+
+    def carpeta_de(self, sistema):
+        """Nombre de la carpeta de especialidad (p. ej. '2. TUBERIAS') donde va una solicitud de ese sistema."""
+        return self.mapa_carpeta.get(norm(sistema)) or self.carpeta_def or sistema
+
+    def carpetas_esp(self):
+        return list(dict.fromkeys([v for v in [self.carpeta_def, *self.mapa_carpeta.values()] if v] or
+                                  ([] if self.todos else self.sistemas)))
+
     def __init__(self, path, prueba=False):
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(';', '#'))
         cp.optionxform = str
@@ -103,7 +114,13 @@ class Cfg:
         self.raices = [r.strip().replace('{año}', str(hoy.year)).replace('{ano}', str(hoy.year))
                        .replace('{año_anterior}', str(hoy.year - 1)).replace('{ano_anterior}', str(hoy.year - 1))
                        for r in g('carpetas', 'raices').split(';') if r.strip()]
-        self.sistemas = [x.strip() for x in re.split(r'[;,]', g('carpetas', 'sistemas')) if x.strip()]
+        self.sistemas = [x.strip() for x in re.split(r'[;,]', g('carpetas', 'sistemas')) if x.strip()] or ['*']
+        self.todos = '*' in self.sistemas
+        self.carpeta_def = g('carpetas', 'carpeta_especialidad')
+        self.mapa_carpeta = {}
+        if cp.has_section('carpeta_por_sistema'):
+            for k, v in cp.items('carpeta_por_sistema'):
+                if v.strip(): self.mapa_carpeta[norm(k)] = v.strip()
         self.sub_sol = g('carpetas', 'subcarpeta_solicitados'); self.sub_res = g('carpetas', 'subcarpeta_reservados')
         self.exe_patron = g('carpetas', 'ejecutable')
         self.intervalo = max(1, int(float(g('proceso', 'intervalo_minutos') or 15)))
@@ -115,9 +132,11 @@ class Cfg:
         self.tz = timezone(timedelta(hours=float(g('proceso', 'zona_horaria') or -5)))
         self.proxy = g('red', 'proxy')
         self.alias = {}
+        self.sis_norm = {norm(x) for x in self.sistemas}
         if cp.has_section('alias_proyectos'):
             for k, v in cp.items('alias_proyectos'):
                 if v.strip(): self.alias[norm(k)] = v.strip()
+        self.desc = ('todos los sistemas' if self.todos else ', '.join(self.sistemas)) + f' → carpeta {self.carpeta_def or "(la del sistema)"}'
         if not self.api_key or not self.clave:
             raise SystemExit('Complete api_key y clave en config.ini (sección [firebase]).')
 
@@ -379,7 +398,7 @@ class Carpetas:
         """Todas las carpetas de los sistemas habilitados, en todos los proyectos."""
         out = []
         for pdir in self.proy.values():
-            for s in self.c.sistemas:
+            for s in self.c.carpetas_esp():
                 sd = self.sistema(pdir, s)
                 if sd: out.append(sd)
         return out
@@ -496,7 +515,6 @@ class Bot:
         if cfg.procesar_desde: self.st['procesar_desde'] = cfg.procesar_desde
         self.eventos = []; self.alertas = []; self.ultimo_error = ''
         self.pc = socket.gethostname(); self.win_user = getpass.getuser()
-        self.sis_norm = {norm(x) for x in cfg.sistemas}
 
     def guardar_estado(self):
         if len(self.st['procesados']) > 3000:
@@ -529,22 +547,28 @@ class Bot:
     # ── 1. exportar ──
     def exportar(self, D, K):
         hechos = set()
-        for s in D.sol:
-            if s.get('estado') != 'Validada': continue
+        val = [s for s in D.sol if s.get('estado') == 'Validada']
+        omit = lambda ref, m: (self.ev('info', f'Omitida {ref}: {m}') if self.c.prueba else log.debug(f'Omitida {ref}: {m}'))
+        log.info(f'Solicitudes en la app: {len(D.sol)} · Validadas: {len(val)} · a automatizar ({self.c.desc}): '
+                 f'{sum(1 for s in val if self.c.automatiza((s.get("header") or {}).get("sistema")))}')
+        for s in val:
             h = s.get('header') or {}
-            if norm(h.get('sistema')) not in self.sis_norm: continue
-            ref = f"{h.get('proyecto')} · {h.get('sistema')} · Pos {h.get('pos') or '—'}"
-            if D.cerrada(s): continue
+            ref = f"{h.get('proyecto')} · {h.get('sistema') or '(sin sistema)'} · Pos {h.get('pos') or '—'}"
+            if not self.c.automatiza(h.get('sistema')):
+                omit(ref, f'el sistema "{h.get("sistema") or ""}" no está en "sistemas" de config.ini'); continue
+            if D.cerrada(s):
+                omit(ref, 'el proyecto está Cerrado'); continue
             if not h.get('grafo') or not h.get('pos'):
                 self.alerta(f'{ref}: validada sin grafo o Pos.; no se exporta.'); continue
             if not s.get('items'):
-                continue
+                omit(ref, 'no tiene materiales'); continue
             pdir = K.proyecto(h.get('proyecto'))
             if not pdir:
                 self.alerta(f'No encuentro la carpeta del proyecto "{h.get("proyecto")}" en {"; ".join(self.c.raices)}. Agregue un alias en config.ini.'); continue
-            sdir = K.sistema(pdir, h.get('sistema'))
+            carp = self.c.carpeta_de(h.get('sistema'))
+            sdir = K.sistema(pdir, carp)
             if not sdir:
-                self.alerta(f'No encuentro la carpeta del sistema "{h.get("sistema")}" dentro de {pdir}.'); continue
+                self.alerta(f'No encuentro la carpeta "{carp}" dentro de {pdir}.'); continue
             sol_dir = K.subdir(sdir, self.c.sub_sol); res_dir = K.subdir(sdir, self.c.sub_res)
             nombre = nombre_archivo(s, self.c.tz); destino = os.path.join(sol_dir, nombre)
             ya = os.path.exists(destino) or os.path.exists(os.path.join(res_dir, nombre))
@@ -649,7 +673,7 @@ class Bot:
     def estado_app(self, fase, detalle=''):
         if self.c.prueba: return
         data = {'version': VERSION, 'pc': self.pc, 'usuarioWindows': self.win_user, 'ultimoContacto': now_iso(),
-                'fase': fase, 'detalle': detalle, 'intervaloMin': self.c.intervalo, 'sistemas': self.c.sistemas,
+                'fase': fase, 'detalle': detalle, 'intervaloMin': self.c.intervalo, 'sistemas': [self.c.desc],
                 'raices': self.c.raices, 'ejecutaExe': self.c.ejecutar_exe, 'ultimoCiclo': self.st.get('ultimo_ciclo', ''),
                 'proximoCiclo': self.st.get('proximo_ciclo', ''), 'ultimoError': self.ultimo_error,
                 'log': self.eventos[-40:], 'alertas': self.alertas[:30], 'resumen': self.st.get('resumen', {})}
@@ -706,7 +730,7 @@ class Bot:
             self.estado_app('esperando', '')
 
     def correr(self, una_vez=False):
-        self.ev('info', f'Bot de reservas v{VERSION} iniciado en {self.pc} ({self.win_user}). Sistemas: {", ".join(self.c.sistemas)}. Cada {self.c.intervalo} min.'
+        self.ev('info', f'Bot de reservas v{VERSION} iniciado en {self.pc} ({self.win_user}). Automatiza: {self.c.desc}. Cada {self.c.intervalo} min.'
                         + (' MODO PRUEBA: no se escribe nada.' if self.c.prueba else ''))
         self.orden_pendiente()  # descarta órdenes antiguas
         while True:
@@ -720,17 +744,36 @@ class Bot:
                 if time.time() - ult_hb > 300:
                     self.estado_app('esperando', ''); ult_hb = time.time()
 
+def diagnostico(cfg):
+    print(f'\n=== Diagnóstico del bot (no escribe nada) ===\nUsuario: {cfg.usuario}@{cfg.dominio} · Proyecto Firebase: {cfg.project}')
+    fs = FS(cfg); D = Datos(fs); K = Carpetas(cfg)
+    print(f'\nRaíces: ' + '; '.join(f'{r} [{"OK" if os.path.isdir(r) else "NO EXISTE"}]' for r in cfg.raices))
+    print(f'Carpetas de proyecto encontradas: {len(K.proy)}')
+    from collections import Counter
+    print(f'\nSolicitudes que ve el bot: {len(D.sol)}  ' + ', '.join(f'{k}: {v}' for k, v in Counter(s.get("estado") for s in D.sol).most_common()))
+    for s in D.sol:
+        if s.get('estado') not in ('Validada', 'Exportada', 'Enviada'): continue
+        h = s.get('header') or {}
+        pdir = K.proyecto(h.get('proyecto')); sdir = K.sistema(pdir, cfg.carpeta_de(h.get('sistema'))) if pdir else None
+        print(f'\n• [{s.get("estado")}] {h.get("proyecto")} · sistema "{h.get("sistema")}" · grafo {h.get("grafo") or "—"} · Pos {h.get("pos") or "—"} · {len(s.get("items") or [])} materiales')
+        print(f'    se automatiza: {"SÍ" if cfg.automatiza(h.get("sistema")) else "NO"} · carpeta proyecto: {pdir or "NO ENCONTRADA"}'
+              f' · carpeta destino: {sdir or "NO ENCONTRADA (" + cfg.carpeta_de(h.get("sistema")) + ")"}')
+    print()
+
 def main():
     ap = argparse.ArgumentParser(description='Bot de reservas — Pedidos de Material TASA')
     ap.add_argument('--config', default=os.path.join(BASE, 'config.ini'))
     ap.add_argument('--una-vez', action='store_true', help='Un solo ciclo y termina')
     ap.add_argument('--prueba', action='store_true', help='No escribe en la app ni en carpetas, no ejecuta el .exe')
+    ap.add_argument('--diagnostico', action='store_true', help='Lista las solicitudes que ve el bot y las carpetas que encuentra')
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)-7s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                         handlers=[logging.StreamHandler(sys.stdout),
                                   RotatingFileHandler(os.path.join(BASE, 'bot_reservas.log'), maxBytes=2_000_000, backupCount=3, encoding='utf-8')])
     try:
-        cfg = Cfg(a.config, prueba=a.prueba)
+        cfg = Cfg(a.config, prueba=a.prueba or a.diagnostico)
+        if a.diagnostico:
+            diagnostico(cfg); return
         Bot(cfg).correr(una_vez=a.una_vez)
     except KeyboardInterrupt:
         log.info('Bot detenido por el usuario.')

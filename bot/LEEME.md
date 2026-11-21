@@ -18,7 +18,7 @@ App: solicitud "Reservada", la contrata ve sus reservas y los bloqueos quedan en
 * **No se modifica el ejecutable**: el bot solo deja los archivos donde ustedes los dejan hoy y lo ejecuta.
 * El bot asocia cada Excel de *Reservados* con su solicitud por **proyecto + fecha de solicitud** (columna R). Si no coinciden, usa grafo, Pos. y códigos. Por eso también registra los Excel que ustedes exporten y carguen a mano.
 * Los nombres **RM / REM** se reconocen como iguales: "RM HERCULES 1" en la app = carpeta "REM HERCULES 1". La carpeta del sistema se encuentra aunque tenga número ("2. TUBERIAS").
-* Por ahora solo se automatiza **TUBERIAS**. Los demás sistemas siguen el proceso manual. Se agregan en `config.ini` → `sistemas`.
+* Por defecto todas las solicitudes validadas (cualquier sistema de la app: ACHIQUE, TUBERIAS…) van a la carpeta de especialidad **TUBERIAS** del proyecto (`carpeta_especialidad`). Para limitar qué sistemas se automatizan use `sistemas`, y para enviar un sistema a otra carpeta use `[carpeta_por_sistema]`.
 * Su estado se ve en la app en **Gestión → 🤖 Bot de reservas** (y en un botón en el Tablero). Ahí está **▶ Ejecutar ahora**, que no espera los 15 minutos.
 
 ## Requisitos de la PC
@@ -35,7 +35,7 @@ App: solicitud "Reservada", la contrata ve sus reservas y los bloqueos quedan en
 3. Copie la carpeta `bot` del repositorio a la PC, por ejemplo a `C:\BotReservas`.
 4. Ejecute **`instalar.bat`**. Instala `requests` y `openpyxl` y crea `config.ini`.
 5. Abra **`config.ini`** con el Bloc de notas y escriba la `clave` del usuario bot. Revise también `raices` y `sistemas`.
-6. Ejecute **`probar_bot.bat`**: hace un ciclo **sin escribir nada**. Revise que:
+6. Ejecute **`diagnostico.bat`**: lista las solicitudes que ve el bot y a qué carpeta irían. Luego **`probar_bot.bat`**: hace un ciclo **sin escribir nada**. Revise que:
    * diga qué solicitudes exportaría y a qué carpeta;
    * no aparezcan líneas `ATENCIÓN: No encuentro la carpeta…`. Si aparecen, agregue el alias en `[alias_proyectos]`.
 7. Cuando la prueba se vea bien, ejecute **`iniciar_bot.bat`**. Deje esa ventana abierta (puede minimizarla).

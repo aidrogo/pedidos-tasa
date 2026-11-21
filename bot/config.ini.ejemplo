@@ -17,8 +17,12 @@ clave      = ESCRIBA_AQUI_LA_CLAVE
 ; Carpeta(s) donde están las carpetas de los proyectos. {año} = año actual,
 ; {año_anterior} = año pasado. Separe varias con ;
 raices   = Z:\Diseño\RESERVAS\Reservas\{año} ; Z:\Diseño\RESERVAS\Reservas\{año_anterior}
-; Sistemas que se automatizan (nombre del sistema en la app). Varios: TUBERIAS, CALDERERIA Y SOLDADURA
-sistemas = TUBERIAS
+; Qué solicitudes se automatizan, según el SISTEMA elegido en la app (ACHIQUE, TUBERIAS…).
+;   *  = todas.  Para limitar: ACHIQUE, AGUAS SERVIDAS, TUBERIAS
+sistemas = *
+; Carpeta de especialidad dentro de cada proyecto donde se dejan los Excel
+; (se reconoce aunque tenga número: "2. TUBERIAS").
+carpeta_especialidad = TUBERIAS
 subcarpeta_solicitados = Solicitados
 subcarpeta_reservados  = Reservados
 ; Ejecutable que carga en SAP (dentro de la carpeta del sistema). * = cualquier texto
@@ -40,6 +44,11 @@ procesar_desde =
 ; si = no escribe nada, solo muestra lo que haría (para la primera prueba)
 modo_prueba = no
 zona_horaria = -5
+
+[carpeta_por_sistema]
+; Solo si algún sistema debe ir a OTRA carpeta de especialidad.
+; Sistema en la app = Carpeta
+; CASCO = CALDERERIA Y SOLDADURA
 
 [alias_proyectos]
 ; Solo si el nombre de la carpeta no se parece al de la app.
