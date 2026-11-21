@@ -520,7 +520,7 @@ function vInicio(){
   const byE=ESTADOS.map(e=>[e,L.filter(s=>estadoEf(s)===e).length]);const mx=Math.max(1,...byE.map(x=>x[1]));
   const embs={};S.embarcaciones.forEach(e=>{if(estProy(e)!=='Cerrado'||act.some(s=>norm(s.header.proyecto)===norm(e.nombre)))embs[e.nombre]={n:0,abiertas:0,items:0}});act.forEach(s=>{const k=s.header.proyecto||'(sin embarcación)';embs[k]=embs[k]||{n:0,abiertas:0,items:0};embs[k].n++;embs[k].items+=(s.items||[]).length;if(!['Atendida','Reservada'].includes(s.estado))embs[k].abiertas++});
   const accion=act.filter(s=>{if(can('validar'))return ['Enviada','Validada','Exportada'].includes(s.estado);return ['Borrador','Observada'].includes(s.estado)}).sort((a,b)=>(b.fechaSolicitud||'').localeCompare(a.fechaSolicitud||'')).slice(0,8);
-  return `${libBanner()}<div class="head"><h1>Tablero</h1>${perSel()}<div class="sp"></div>${can('validar')?'<button class="btn" data-act="importXL">⬆ Importar Excel recibido</button>':''}${can('crear')?'<button class="btn a" data-act="go" data-v="nueva">+ Nueva solicitud</button>':''}</div>
+  return `${libBanner()}<div class="head"><h1>Tablero</h1>${perSel()}${botChip()}<div class="sp"></div>${can('validar')?'<button class="btn" data-act="importXL">⬆ Importar Excel recibido</button>':''}${can('crear')?'<button class="btn a" data-act="go" data-v="nueva">+ Nueva solicitud</button>':''}</div>
   <div class="kpis" id="tour-kpis">${K.map(([l,n,f,c])=>`<div class="kpi" style="--c:${c}" data-act="kpi" data-f="${f}"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
   <div class="grid g2"><div class="card"><h2>Solicitudes por estado</h2><div class="bars">${byE.map(([e,n])=>`<div class="b"><span>${chip(e)}</span><div class="t"><i style="width:${n/mx*100}%"></i></div><b>${n}</b></div>`).join('')}</div></div>
   <div class="card"><h2>Por embarcación</h2>${Object.keys(embs).length?`<div class="scroll"><table><thead><tr><th>Embarcación</th><th>Proyecto</th><th>Solic.</th><th>Abiertas</th><th>Ítems</th></tr></thead><tbody>${Object.entries(embs).map(([k,v])=>`<tr class="click" data-act="kpiEmb" data-e="${esc(k)}"><td>${esc(k)}</td><td>${embBy(k)?chipP(estProy(embBy(k))):''}</td><td>${v.n}</td><td>${v.abiertas}</td><td>${v.items}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sin solicitudes todavía.</div>'}</div></div>
@@ -711,10 +711,36 @@ function vEmb(){const ed=can('editar_emb');const f=S.embF||'';
 function vGestion(){const adm=can('usuarios'),T=[['cuenta','Mi cuenta']];
   if(adm)T.push(['usuarios','Usuarios'],['empresas','Empresas'],['roles','Roles'],['periodos','Periodos'],['cargos','Cargos'],['correos','Correos'],['unidades','Unidades']);
   if(can('validar'))T.push(['alertas','Alertas'+(S.notifs.filter(n=>n.estado!=='enviada').length?' ('+S.notifs.filter(n=>n.estado!=='enviada').length+')':'')]);
+  if(can('validar')&&S.fb)T.push(['bot','🤖 Bot de reservas']);
   if(can('eliminar'))T.push(['datos','Eliminar datos']);
   if(!T.some(t=>t[0]===S.gTab))S.gTab='cuenta';
-  const body={cuenta:gCuenta,usuarios:gUsuarios,alertas:gAlertas,unidades:gUnidades,correos:gCorreos,empresas:gEmpresas,roles:gRoles,periodos:gPeriodos,cargos:gCargos,datos:gDatos}[S.gTab]();
+  const body={cuenta:gCuenta,usuarios:gUsuarios,alertas:gAlertas,unidades:gUnidades,correos:gCorreos,empresas:gEmpresas,roles:gRoles,periodos:gPeriodos,cargos:gCargos,datos:gDatos,bot:gBot}[S.gTab]();
   return `<div class="head"><h1>Gestión</h1></div><div class="tabs" style="overflow-x:auto">${T.map(([k,l])=>`<button class="${S.gTab===k?'on':''}" data-act="gTab" data-t="${k}">${l}</button>`).join('')}</div>${body}`}
+/* ============ Bot de reservas ============ */
+function haceTxt(iso){const d=parseISO(iso);if(!d)return '—';const m=Math.round((Date.now()-d)/60000);if(m<1)return 'hace instantes';if(m<60)return 'hace '+m+' min';const h=Math.round(m/60);if(h<48)return 'hace '+h+' h';return 'hace '+Math.round(h/24)+' días'}
+function parseISO(s){if(!s)return null;const d=new Date(s);return isNaN(d)?null:d}
+function botEnLinea(){const b=S.bot;const d=b&&parseISO(b.ultimoContacto);return !!d&&(Date.now()-d)<12*60000}
+function botChip(){if(!S.fb||!can('validar'))return '';const b=S.bot;if(!b)return '';const on=botEnLinea();
+  return `<button class="btn s" data-act="gTabGo" data-t="bot" title="Bot de reservas" style="border-color:${on?'#9fd8b9':'#eea79d'};background:${on?'#eaf7f0':'#fde6e3'}">🤖 ${on?(b.fase==='ejecutando'?'Cargando en SAP…':b.fase==='trabajando'?'Trabajando…':'Bot en línea'):'Bot desconectado'}</button>`}
+function gBot(){const b=S.bot;
+  if(!b)return `<div class="card"><h2>🤖 Bot de reservas</h2><p>El bot todavía no se ha conectado.</p><p class="small muted">Se instala en una PC con acceso a la unidad Z: y a SAP. Siga la guía <b>bot/LEEME.md</b> del repositorio. Cuando arranque, aquí verá su estado.</p></div>`;
+  const on=botEnLinea(),L=(b.log||[]).slice().reverse(),A=b.alertas||[],r=b.resumen||{};
+  const col={ok:'var(--ok)',info:'var(--muted)',aviso:'#b36b00',error:'var(--bad)'};
+  return `<div class="card"><div class="row" style="align-items:center"><h2 style="margin:0">🤖 Bot de reservas</h2><span class="chip" style="background:${on?'#d3efe4':'#fbdcd8'};color:${on?'#0b4d3a':'#7d1a10'}">${on?'En línea':'Desconectado'}</span><div style="flex:1"></div>
+   <button class="btn p" data-act="botAhora" ${on?'':'disabled title="El bot está desconectado"'}>▶ Ejecutar ahora</button></div>
+   ${b.ordenPedida?'':''}
+   <div class="grid g3" style="margin-top:12px">
+    <div><label>Estado</label><div>${esc(b.fase==='ejecutando'?'⚙ Cargando en SAP':b.fase==='trabajando'?'🔄 Revisando':'⏸ Esperando')}${b.detalle?`<div class="small muted">${esc(b.detalle)}</div>`:''}</div></div>
+    <div><label>Último contacto</label><div>${esc(haceTxt(b.ultimoContacto))}</div><div class="small muted">PC ${esc(b.pc||'?')} · ${esc(b.usuarioWindows||'')}</div></div>
+    <div><label>Último ciclo</label><div>${esc(haceTxt(b.ultimoCiclo))}</div><div class="small muted">${b.proximoCiclo?'Próximo: '+esc(fdt(b.proximoCiclo)):''} · cada ${esc(b.intervaloMin||'?')} min</div></div>
+    <div><label>Sistemas automatizados</label><div>${(b.sistemas||[]).map(esc).join(', ')||'—'}</div></div>
+    <div><label>Carpeta</label><div class="small mono" style="word-break:break-all">${(b.raices||[]).map(esc).join('<br>')}</div></div>
+    <div><label>Último ciclo hizo</label><div class="small">${r.exportadas!=null?`${r.exportadas} carpeta(s) con nuevos Excel · ${r.reservasLeidas||0} reserva(s) leídas · ${r.proyectos||0} proyectos encontrados`:'—'}</div></div></div>
+   ${b.ultimoError?`<div class="bad" style="margin-top:12px">⚠ ${esc(b.ultimoError)}</div>`:''}
+   ${!b.ejecutaExe?'<div class="warn" style="margin-top:12px">El bot está configurado para <b>no</b> ejecutar el Código_reserva: solo deja los Excel en Solicitados y lee los de Reservados.</div>':''}
+   <p class="small muted" style="margin-top:10px">Cada ciclo: toma las solicitudes <b>Validadas</b> de los sistemas automatizados, deja su Excel en la carpeta <b>Solicitados</b> del proyecto, ejecuta el Código_reserva y lee la carpeta <b>Reservados</b> para registrar reserva, posición y bloqueos. <b>Ejecutar ahora</b> también procesa lo que haya quedado en Solicitados.</p></div>
+  ${A.length?`<div class="card"><h2>Requiere atención (${A.length})</h2><ul class="issues">${A.map(a=>`<li class="aviso">${esc(a)}</li>`).join('')}</ul></div>`:''}
+  <div class="card"><h2>Actividad reciente</h2>${L.length?`<div class="hist">${L.map(x=>`<div><b>${esc(fdt(x.t))}</b> <span style="color:${col[x.n]||'inherit'}">${esc(x.m)}</span></div>`).join('')}</div>`:'<div class="empty">Sin actividad.</div>'}</div>`}
 const soloProp=()=>S.owner?'':'<div class="warn" style="margin-bottom:10px">Solo la propietaria del enlace puede guardar cambios en usuarios y roles.</div>';
 function gCuenta(){const c=miCuenta()||{},cr=S.creds[c.id]||{};const M=S.mc||(S.mc={a:'',n:'',r:'',c1:cr.correo1||'',c2:cr.correo2||'',c3:cr.correo3||''});
   if(c.id==='__owner__')return '<div class="card">Acceso de recuperación: cree su usuario en la pestaña Usuarios.</div>';
@@ -924,7 +950,7 @@ function mImpLista(M){const R=M.rows||[];const n=R.filter(r=>r.usar).length,nref
 /* ============ Novedades de versión ============ */
 const APP_VERSION='1.10';
 const CHANGELOG=[
- {v:'1.10',f:'2026-11-20',t:'Accesos por proveedor y tutorial',items:['🔒 Cada empresa proveedora puede tener <b>acceso solo a ciertas embarcaciones y sistemas</b>: al crear una solicitud solo verá lo que le corresponde y no podrá enviar pedidos fuera de su acceso.','❓ Nuevo <b>Tutorial</b> guiado (botón arriba a la derecha) que enseña paso a paso a crear y enviar una lista. Los usuarios nuevos lo ven al ingresar por primera vez.']},
+ {v:'1.10',f:'2026-11-21',t:'Accesos por proveedor, tutorial y bot de reservas',items:['🤖 <b>Bot de reservas</b>: deja automáticamente los Excel validados en la carpeta Solicitados, ejecuta el Código_reserva y registra la reserva y posición en la app. Su estado se ve en Gestión → Bot de reservas.','🔒 Cada empresa proveedora puede tener <b>acceso solo a ciertas embarcaciones y sistemas</b>: al crear una solicitud solo verá lo que le corresponde y no podrá enviar pedidos fuera de su acceso.','❓ Nuevo <b>Tutorial</b> guiado (botón arriba a la derecha) que enseña paso a paso a crear y enviar una lista. Los usuarios nuevos lo ven al ingresar por primera vez.']},
  {v:'1.9',f:'2026-11-20',t:'Carga diaria, envío flexible y alertas de retraso',items:['⬆ En Embarcaciones: <b>Cargar actividades y grafos (Excel)</b> con vista previa; solo se agrega lo nuevo y no se elimina nada.','📨 Puede <b>enviar la solicitud sin grafo ni Pos.</b> si no los conoce: el planificador los asignará.','✏ Mientras su solicitud <b>no haya sido revisada</b>, puede corregirla (agregar materiales o cambiar la embarcación).','✉ Los correos se abren directo en <b>Gmail</b>, <b>Outlook web</b> o la app de correo del equipo.','🏷 El estado <b>Enviada</b> ahora se llama <b>Solicitado</b>, y el indicador <b>Con reserva</b> cuenta las solicitudes reservadas y las ya atendidas.','⏰ Alerta de <b>actividades retrasadas</b> para planificadores; 📅 el periodo se asigna a cada embarcación.']},
  {v:'1.8',f:'2026-11-19',t:'Estados SAP y pendientes de la contrata',items:['✅ El Excel devuelto por el script actualiza cada material como <b>Reservado</b> o <b>Bloqueado</b>.','🔓 En Bloqueos: marque <b>Solicitud de desbloqueo enviada</b> y, cuando el código esté desbloqueado, cargue su <b>reserva y posición</b> ahí mismo.','📋 Las contratas ven en <b>Pendientes</b> sus códigos bloqueados, sus materiales sin código y una alerta 🎉 cuando ya tienen reserva.']},
  {v:'1.7',f:'2026-11-19',t:'Buzón de mejoras y novedades',items:['💡 Nuevo <b>Buzón de mejoras</b>: proponga funciones, reporte errores y vote 👍 las ideas de otros usuarios.','📣 Esta ventana de <b>novedades</b> le avisará cada vez que la app tenga funciones nuevas.']},
@@ -1112,7 +1138,7 @@ function retrasoCard(){if(!can('validar'))return '';const L=retrasadas();if(!L.l
 function periodoEmb(nombre){const e=embBy(nombre);return (e&&e.periodo)||''}
 
 /* ============ Lectura tolerante de columnas Reserva / Posición / Estado ============ */
-const BUILD='2026-11-20 12:40';
+const BUILD='2026-11-21 11:00';
 function colRes(r){for(const k in r){if(k.includes('reserva')&&!/fecha|estado|tipo|clase/.test(k)&&String(r[k]).trim()!=='')return String(cell(r[k])).trim()}return ''}
 function colPosRes(r){for(const k of ['posicion','posicionreserva','posreserva','posres','itemreserva','posicionres'])if(r[k]!==undefined&&String(r[k]).trim()!=='')return String(cell(r[k])).trim();
   for(const k in r){if((k.startsWith('posicion')||(k.includes('pos')&&k.includes('res')))&&String(r[k]).trim()!=='')return String(cell(r[k])).trim()}return ''}
@@ -1355,6 +1381,8 @@ const ACT={
   async confirmOK(){const f=S.modal.fn;S.modal=null;render();await f()},
   closeM(){S.modal=null;render()},
   tutorial(){tourStart()},
+  gTabGo(el){S.view='gestion';S.gTab=el.dataset.t;render()},
+  async botAhora(){try{await FB.raw.doc('botEstado/orden').set({pedido:nowISO(),por:S.cuenta});toast('Orden enviada: el bot empezará en menos de 1 minuto.')}catch(e){toast('No se pudo enviar la orden: '+(e.message||e.code),'bad')}},
   ovClick(el,ev){if(ev.target===el){S.modal=null;render()}},
   matTab(el){S.matTab=el.dataset.t;render()},
   matModal(el){const m=el.dataset.id&&S.materiales.find(x=>x.id===el.dataset.id);S.modal={t:'mat',isNew:!m,v:m?clone(m):{codigo:'',desc:'',um:'UN',cat:'',calc:null},test:{}};render()},
@@ -1672,6 +1700,7 @@ function subscribeFB(){const db=FB.raw;const t=setTimeout(()=>{S.stale=true;rend
   col('catalogo','cat',l=>{chunks={};l.forEach(d=>chunks[d.id]=d.items||{});rebuildMat()});
   col('materiales','refs',l=>{refDocs=l;rebuildMat()});
   col('embarcaciones','embarcaciones');col('empresas','empresas');col('plantillasSol','plantSol');col('notificaciones','notifs');col('mejoras','mejoras');
+  subs.push(db.doc('botEstado/estado').onSnapshot(sn=>{S.bot=sn.exists?sn.data():null;afterData()},()=>{}));
   col('cuentas','cuentas',l=>{S.cuentas=l;const m={};l.forEach(c=>m[c.id]=c);S.creds=m});
   col('rolesCfg','rolesCfg',l=>{S.rolesCfg=l.sort((a,b)=>(a.orden??99)-(b.orden??99)).map(r=>({id:r.id,nombre:r.nombre,permisos:r.permisos||[]}))});
   if(S.me&&S.me.rol==='admin')col('claves','claves');
@@ -1786,7 +1815,7 @@ async function importar(D){const db=FB.raw;const prog=m=>{S.resProg=m;S.gTab='da
 /* Aviso de nueva versión publicada en GitHub (evita trabajar con una copia vieja en caché) */
 async function revisarVersion(){if(!S.fb||S.nuevaVersion||location.protocol==='file:')return;try{const r=await fetch(location.href.split('#')[0]+(location.search?'&':'?')+'v='+Date.now(),{cache:'no-store'});const t=await r.text();const m=t.match(/const BUILD='([^']+)'/);
   if(m&&m[1]!==BUILD){S.nuevaVersion=m[1];schedule()}}catch(e){}}
-setInterval(revisarVersion,5*60*1000);setTimeout(revisarVersion,15000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')revisarVersion()});
+setInterval(revisarVersion,5*60*1000);setInterval(()=>{if(S.bot&&(S.view==='inicio'||S.gTab==='bot')&&!S.modal&&!S.tour&&!(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))render()},60000);setTimeout(revisarVersion,15000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')revisarVersion()});
 async function boot(){const cfg=window.FIREBASE_CONFIG;
   if(!cfg||!cfg.apiKey||!window.firebase){if(window.claude&&window.claude.use)return bootClaude();S.demo=true;S.db=memDB();S.uid='demo';S.owner=true;await seedDemo(S.db);S.boot='ok';subscribeDemo();render();return}
   S.fb=true;firebase.initializeApp(cfg);FB.auth=firebase.auth();const fs=firebase.firestore();

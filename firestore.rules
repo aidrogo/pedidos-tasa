@@ -60,6 +60,11 @@ service cloud.firestore {
       allow read: if active();
       allow write: if perm('editar_emb');
     }
+    // Bot de reservas: estado publicado por el bot (usuario con rol Planificador) y orden "Ejecutar ahora"
+    match /botEstado/{id} {
+      allow read: if active();
+      allow write: if perm('validar');
+    }
     match /empresas/{id} {
       allow read: if active();
       allow write: if perm('usuarios') || perm('validar');

@@ -1,0 +1,8 @@
+config.ini
+estado_bot.json
+*.log
+*.log.*
+__pycache__/
+build/
+dist/
+*.spec

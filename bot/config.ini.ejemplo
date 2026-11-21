@@ -1,0 +1,50 @@
+; ============================================================
+;  Bot de reservas — Pedidos de Material · Astillero TASA
+;  Copie este archivo como  config.ini  y complete los datos.
+;  Las líneas que empiezan con ; son comentarios.
+; ============================================================
+
+[firebase]
+; Mismos datos que config.js de la app
+api_key    = AIzaSyCrVwkOyKCFku-Gu8CsGY_JIirgPb-2-RE
+project_id = pedidos-tasa
+dominio    = pedidos-tasa.app
+; Usuario creado en la app (Gestión → Usuarios) con rol Planificador
+usuario    = bot
+clave      = ESCRIBA_AQUI_LA_CLAVE
+
+[carpetas]
+; Carpeta(s) donde están las carpetas de los proyectos. {año} = año actual,
+; {año_anterior} = año pasado. Separe varias con ;
+raices   = Z:\Diseño\RESERVAS\Reservas\{año} ; Z:\Diseño\RESERVAS\Reservas\{año_anterior}
+; Sistemas que se automatizan (nombre del sistema en la app). Varios: TUBERIAS, CALDERERIA Y SOLDADURA
+sistemas = TUBERIAS
+subcarpeta_solicitados = Solicitados
+subcarpeta_reservados  = Reservados
+; Ejecutable que carga en SAP (dentro de la carpeta del sistema). * = cualquier texto
+ejecutable = C*digo_reserva*.exe
+
+[proceso]
+; Cada cuántos minutos revisa
+intervalo_minutos = 15
+; si / no
+exportar        = si
+ejecutar_exe    = si
+leer_reservados = si
+tiempo_max_exe_minutos = 30
+; Solo lee Excel de Reservados modificados desde esta fecha (AAAA-MM-DD HH:MM).
+; Vacío = desde el primer arranque del bot (no toca lo histórico).
+procesar_desde =
+; si = no escribe nada, solo muestra lo que haría (para la primera prueba)
+modo_prueba = no
+zona_horaria = -5
+
+[alias_proyectos]
+; Solo si el nombre de la carpeta no se parece al de la app.
+; (RM y REM ya se reconocen como iguales: "RM HERCULES 1" = "REM HERCULES 1")
+; Nombre en la app = Nombre de la carpeta
+; EP TASA 218 = E.P. TASA 218
+
+[red]
+; Solo si la red de la empresa usa proxy, ej.: http://proxy.tasa.com.pe:8080
+proxy =
