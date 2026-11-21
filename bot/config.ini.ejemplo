@@ -33,11 +33,17 @@ ejecutable = C*digo_reserva*.exe
 intervalo_minutos = 15
 ; si / no
 exportar        = si
-; El Código_reserva actual (Reservatron) abre una ventana y pide confirmar cada archivo:
-; déjelo en 'no' hasta tener la versión con modo automático.
+; si = el bot ejecuta el Reservatron (versión con --auto) en la carpeta donde dejó Excel.
+; Requiere SAP abierto y con sesión iniciada en esta PC, y la pantalla sin bloquear.
 ejecutar_exe    = no
+; Código del operador SAP que firma el texto explicativo (AIDROGO, HCUELLAR, LMONTENEGRO, GMUNOZ, ONAVARRO)
+operador_sap = AIDROGO
+; Minutos que el Reservatron espera respuesta cuando suena la sirena (luego omite ese archivo)
+espera_respuesta_minutos = 10
+; Cada cuántos minutos reintentar archivos del bot que quedaron en Solicitados (0 = no reintentar)
+reintentar_minutos = 60
 leer_reservados = si
-tiempo_max_exe_minutos = 30
+tiempo_max_exe_minutos = 60
 ; Solo lee Excel de Reservados modificados desde esta fecha (AAAA-MM-DD HH:MM).
 ; Vacío = desde el primer arranque del bot (no toca lo histórico).
 procesar_desde =

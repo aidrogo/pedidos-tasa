@@ -78,7 +78,8 @@ DEF_CFG = {
                  'sistemas': '*', 'carpeta_especialidad': 'TUBERIAS', 'subcarpeta_solicitados': 'Solicitados', 'subcarpeta_reservados': 'Reservados',
                  'ejecutable': 'C*digo_reserva*.exe'},
     'proceso': {'intervalo_minutos': '15', 'exportar': 'si', 'ejecutar_exe': 'no', 'leer_reservados': 'si',
-                'tiempo_max_exe_minutos': '30', 'procesar_desde': '', 'modo_prueba': 'no', 'zona_horaria': '-5'},
+                'tiempo_max_exe_minutos': '60', 'operador_sap': '', 'espera_respuesta_minutos': '10',
+                'argumentos_exe': '--auto --operador {operador} --espera {espera}', 'reintentar_minutos': '60', 'procesar_desde': '', 'modo_prueba': 'no', 'zona_horaria': '-5'},
     'red': {'proxy': ''},
 }
 
@@ -126,7 +127,11 @@ class Cfg:
         self.intervalo = max(1, int(float(g('proceso', 'intervalo_minutos') or 15)))
         self.exportar = si('proceso', 'exportar'); self.ejecutar_exe = si('proceso', 'ejecutar_exe')
         self.leer_res = si('proceso', 'leer_reservados')
-        self.exe_timeout = max(1, int(float(g('proceso', 'tiempo_max_exe_minutos') or 30))) * 60
+        self.exe_timeout = max(1, int(float(g('proceso', 'tiempo_max_exe_minutos') or 60))) * 60
+        self.operador = g('proceso', 'operador_sap').upper()
+        self.espera = max(1, int(float(g('proceso', 'espera_respuesta_minutos') or 10)))
+        self.exe_args = g('proceso', 'argumentos_exe').replace('{operador}', self.operador or 'AIDROGO').replace('{espera}', str(self.espera)).split()
+        self.reintentar = int(float(g('proceso', 'reintentar_minutos') or 0))
         self.procesar_desde = g('proceso', 'procesar_desde')
         self.prueba = prueba or si('proceso', 'modo_prueba')
         self.tz = timezone(timedelta(hours=float(g('proceso', 'zona_horaria') or -5)))
@@ -582,7 +587,8 @@ class Bot:
                 s['estado'] = 'Exportada'
                 self.hist(s, f'🤖 Bot: {"el Excel ya estaba" if ya else "generó el Excel"} en {sol_dir if not ya else "la carpeta"} ({nombre})')
                 if self.guardar_sol(s, ['estado', 'fechaCarga', 'historial'], ''):
-                    self.ev('ok', f'Exportada {ref} → {destino}'); hechos.add(sdir); break
+                    self.ev('ok', f'Exportada {ref} → {destino}'); hechos.add(sdir)
+                    self.st.setdefault('exportados', {})[destino] = now_iso(); break
                 # conflicto: alguien la editó; volver a leer
                 s2 = self.fs.leer('solicitudes/' + s['id'])
                 if not s2 or s2.get('estado') != 'Validada':
@@ -608,17 +614,50 @@ class Bot:
             t0 = time.time()
             try:
                 kw = {'creationflags': subprocess.CREATE_NEW_CONSOLE} if os.name == 'nt' else {}
-                cmd = [exe] if exe.lower().endswith('.exe') or os.name == 'nt' else [sys.executable, exe]
+                cmd = ([exe] if exe.lower().endswith('.exe') or os.name == 'nt' else [sys.executable, exe]) + self.c.exe_args
+                self.st.setdefault('intentos', {})[sdir] = now_iso()
                 r = subprocess.run(cmd, cwd=sdir, timeout=self.c.exe_timeout, stdin=subprocess.DEVNULL, **kw)
                 quedan = [p for p in pend if os.path.exists(p)]
-                lvl = 'ok' if r.returncode == 0 and not quedan else 'aviso'
-                self.ev(lvl, f'{os.path.basename(exe)} terminó (código {r.returncode}, {time.time() - t0:.0f} s). '
-                             f'{len(pend) - len(quedan)} de {len(pend)} archivo(s) pasaron a Reservados.')
+                resumen = self.resumen_reservatron(sdir)
+                proy = os.path.basename(os.path.dirname(sdir))
+                txt = {0: 'todo procesado', 1: 'quedaron archivos pendientes', 2: 'error general (¿SAP abierto y con sesión?)',
+                       3: 'otro Reservatron ya estaba trabajando en esa carpeta'}.get(r.returncode, f'código {r.returncode}')
+                lvl = 'ok' if r.returncode == 0 and not quedan else ('error' if r.returncode == 2 else 'aviso')
+                self.ev(lvl, f'Reservatron en {proy}: {txt} ({time.time() - t0:.0f} s). {len(pend) - len(quedan)} de {len(pend)} archivo(s) pasaron a Reservados.'
+                             + (f' {resumen}' if resumen else ''))
+                if r.returncode == 2: self.alerta(f'Reservatron en {proy} no pudo trabajar: {resumen or "revise SAP"}')
                 for q in quedan: self.alerta(f'Quedó en Solicitados sin procesar: {q}')
             except subprocess.TimeoutExpired:
                 self.ev('error', f'{os.path.basename(exe)} superó {self.c.exe_timeout // 60} min en {sdir}; se dejó de esperar.')
             except Exception as e:
                 self.ev('error', f'No se pudo ejecutar {exe}: {e}')
+
+    @staticmethod
+    def resumen_reservatron(sdir):
+        """Última línea RESUMEN del Reservatron_auto.log de esa carpeta."""
+        try:
+            with open(os.path.join(sdir, 'Reservatron_auto.log'), encoding='utf-8', errors='replace') as f:
+                lineas = f.readlines()[-60:]
+            for l in reversed(lineas):
+                if l.startswith('RESUMEN:'): return l.strip()
+        except Exception:
+            pass
+        return ''
+
+    def carpetas_a_ejecutar(self, exportadas, K, forzar):
+        """Carpetas donde correr el Reservatron: las que recibieron Excel en este ciclo y, para reintentar,
+        las que aún tienen en Solicitados algún Excel que dejó el bot (nunca por archivos ajenos)."""
+        exp = self.st.setdefault('exportados', {})
+        for pth in list(exp):
+            if not os.path.exists(pth): del exp[pth]
+        carp = set(exportadas)
+        ahora = datetime.now(timezone.utc)
+        for pth in exp:
+            sdir = os.path.dirname(os.path.dirname(pth))
+            ult = parse_iso(self.st.get('intentos', {}).get(sdir))
+            if forzar or (self.c.reintentar > 0 and (not ult or (ahora - ult).total_seconds() > self.c.reintentar * 60)):
+                carp.add(sdir)
+        return carp
 
     # ── 3. reservados ──
     def leer_reservados(self, D, K):
@@ -706,8 +745,7 @@ class Bot:
             D = Datos(self.fs)
             exp = self.exportar(D, K) if self.c.exportar else set()
             if self.c.ejecutar_exe:
-                carp = set(exp)
-                if forzar_exe: carp |= set(K.carpetas_sistema())
+                carp = self.carpetas_a_ejecutar(exp, K, forzar_exe)
                 self.ejecutar(carp, K)
                 if carp: D = Datos(self.fs)
             nres = self.leer_reservados(D, K) if self.c.leer_res else 0

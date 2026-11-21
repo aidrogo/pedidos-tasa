@@ -45,6 +45,28 @@ App: solicitud "Reservada", la contrata ve sus reservas y los bloqueos quedan en
 * Al primer arranque el bot **solo lee los Excel de *Reservados* que aparezcan desde ese momento**: no toca el histórico. Para registrar algo anterior, ponga una fecha en `procesar_desde`.
 * Por defecto `ejecutar_exe = no`: el bot deja los Excel en *Solicitados* y lee *Reservados*, y ustedes siguen ejecutando el Reservatron a mano. La versión actual del Reservatron abre una ventana, espera **▶ INICIAR PROCESO** y pide confirmar cada archivo, así que no puede correr sin una persona. Active `ejecutar_exe = si` solo con una versión que tenga modo automático.
 
+## Etapa 2: el bot también ejecuta el Reservatron
+Requiere la versión del Reservatron con **modo automático** (`--auto`). Compílela y reemplace el `.exe` en las carpetas TUBERIAS de los proyectos.
+
+1. En la PC del bot: **SAP abierto y con sesión iniciada**, pantalla **sin bloqueo** y sin suspensión (Configuración → Sistema → Inicio/apagado: "Nunca"). Parlantes con volumen para la sirena.
+2. En `config.ini`:
+   ```
+   ejecutar_exe = si
+   operador_sap = AIDROGO
+   espera_respuesta_minutos = 10
+   reintentar_minutos = 60
+   ```
+3. Reinicie el bot (cierre la ventana y abra `iniciar_bot.bat`).
+
+Qué pasa en cada ciclo:
+* El bot deja el Excel en *Solicitados* y ejecuta `Código_reserva_2.exe --auto --operador AIDROGO --espera 10` en esa carpeta. No hay ventana ni botón INICIAR.
+* Si la actividad coincide: carga, graba, PDF, correo y mueve a *Reservados*, sin intervención. En el siguiente ciclo la app queda **Reservada**.
+* Si la actividad **no coincide** o el **grafo está en uso**: suena la sirena y aparece la pregunta encima de todo. Si nadie responde en 10 min, ese archivo se omite y queda en *Solicitados*. El bot lo reintenta cada 60 min y lo muestra en "Requiere atención".
+* Si SAP no está disponible (sesión cerrada, SAP caído): el Reservatron termina con error, suena la sirena 6 s y el panel lo muestra en rojo.
+* El bot solo ejecuta el Reservatron en carpetas donde **él** dejó un Excel. Aun así, el Reservatron procesa *todos* los Excel de esa carpeta *Solicitados*: no deje archivos viejos ahí.
+* Cada carpeta guarda el registro del modo automático en `Reservatron_auto.log`.
+* Si alguien abre el Reservatron a mano mientras el bot lo está usando en la misma carpeta, verá "Reservatron en uso" (y viceversa): nunca procesan los mismos archivos a la vez.
+
 ## Archivos
 | Archivo | Para qué |
 |---|---|
